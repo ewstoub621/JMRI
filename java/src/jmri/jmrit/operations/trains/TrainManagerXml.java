@@ -32,16 +32,19 @@ public class TrainManagerXml extends OperationsXml implements InstanceManagerAut
 
     private static final String BUILD_REPORT_FILE_NAME = Bundle.getMessage("train") + " (";
     private static final String MANIFEST_FILE_NAME = Bundle.getMessage("train") + " (";
+    private static final String REVENUE_FILE_NAME = Bundle.getMessage("train") + " (";
     private static final String SWITCH_LIST_FILE_NAME = Bundle.getMessage("location") + " (";
     private static final String BACKUP_BUILD_REPORT_FILE_NAME = Bundle.getMessage("Report") + " " + Bundle.getMessage("train") + " (";
     private static final String FILE_TYPE_TXT = ").txt"; // NOI18N
     private static final String FILE_TYPE_CSV = ").csv"; // NOI18N
+    private static final String FILE_TYPE_SER = ").ser"; // NOI18N
 
     // the directories under operations
     static final String BUILD_STATUS = "buildstatus"; // NOI18N
     static final String MANIFESTS = "manifests"; // NOI18N
     static final String SWITCH_LISTS = "switchLists"; // NOI18N
     public static final String CSV_MANIFESTS = "csvManifests"; // NOI18N
+    public static final String CSV_REVENUES = "csvRevenues"; // NOI18N
     public static final String CSV_SWITCH_LISTS = "csvSwitchLists"; // NOI18N
     static final String JSON_MANIFESTS = "jsonManifests"; // NOI18N
     static final String MANIFESTS_BACKUPS = "manifestsBackups"; // NOI18N
@@ -279,6 +282,68 @@ public class TrainManagerXml extends OperationsXml implements InstanceManagerAut
 
     public void createDefaultCsvManifestDirectory() {
         FileUtil.createDirectory(getDefaultCsvManifestDirectory());
+    }
+
+    /**
+     * Store the CSV train revenue
+     *
+     * @param train Full path name to CSV train revenue file.
+     * @return Train CSV revenue File.
+     */
+    public File createTrainCsvRevenueFile(Train train) {
+        return createFile(getDefaultTrainCsvRevenueFileName(train), false); // don't backup
+    }
+
+    public File getTrainCsvRevenueFile(Train train) {
+        String defaultCsvRevenueFileName = getDefaultTrainCsvRevenueFileName(train);
+        return new File(defaultCsvRevenueFileName);
+    }
+
+    public String getDefaultTrainCsvRevenueFileName(Train train) {
+        String date = TrainCsvCommon.getDate(true)
+                .replace('/', '_')
+                .replace(':', '_')
+                .replace(' ', '_');
+
+        return getDefaultTrainCsvRevenueDirectory()
+                + REVENUE_FILE_NAME
+                + train.getName() + ")_("
+                + date
+                + FILE_TYPE_CSV;
+    }
+
+    public void createDefaultTrainCsvRevenueDirectory() {
+        FileUtil.createDirectory(getDefaultTrainCsvRevenueDirectory());
+    }
+
+    private String getDefaultTrainCsvRevenueDirectory() {
+        return OperationsXml.getFileLocation()
+                + OperationsXml.getOperationsDirectoryName()
+                + File.separator
+                + CSV_REVENUES
+                + File.separator;
+    }
+
+    /**
+     * The '.ser' file is used to write and read the TrainRevenues object to and from the csvRevenues directory
+     *
+     * @param train
+     * @return
+     */
+    public File createTrainRevenuesSerFile(Train train) {
+        return createFile(getDefaultTrainRevenuesSerFileName(train), false); // don't backup
+    }
+
+    public File getTrainRevenuesSerFile(Train train) {
+        return new File(getDefaultTrainRevenuesSerFileName(train));
+    }
+
+    private String getDefaultTrainRevenuesSerFileName(Train train) {
+        return getDefaultTrainCsvRevenueDirectory()
+                + REVENUE_FILE_NAME
+                + train.getName() + ")_("
+                + train.getId()
+                + FILE_TYPE_SER;
     }
 
     /**

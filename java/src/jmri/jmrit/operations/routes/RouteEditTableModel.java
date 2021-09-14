@@ -43,7 +43,8 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
     private static final int TIME_COLUMN = WAIT_COLUMN + 1;
     private static final int MAXLENGTH_COLUMN = TIME_COLUMN + 1;
     private static final int GRADE = MAXLENGTH_COLUMN + 1;
-    private static final int TRAINICONX = GRADE + 1;
+    private static final int TRANSPORT_FEE = GRADE + 1;
+    private static final int TRAINICONX = TRANSPORT_FEE + 1;
     private static final int TRAINICONY = TRAINICONX + 1;
     private static final int COMMENT_COLUMN = TRAINICONY + 1;
     private static final int UP_COLUMN = COMMENT_COLUMN + 1;
@@ -65,6 +66,13 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
         XTableColumnModel tcm = (XTableColumnModel) _table.getColumnModel();
         tcm.setColumnVisible(tcm.getColumnByModelIndex(WAIT_COLUMN), showWait);
         tcm.setColumnVisible(tcm.getColumnByModelIndex(TIME_COLUMN), !showWait);
+    }
+
+    public String[] getTips() {
+        String[] tips = new String[getColumnCount()];
+        tips[TRANSPORT_FEE] = Bundle.getMessage("TransportFeeToolTip");
+
+        return tips;
     }
 
     private void updateList() {
@@ -122,12 +130,17 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
         table.getColumnModel().getColumn(TIME_COLUMN).setPreferredWidth(65);
         table.getColumnModel().getColumn(MAXLENGTH_COLUMN).setPreferredWidth(75);
         table.getColumnModel().getColumn(GRADE).setPreferredWidth(50);
+        table.getColumnModel().getColumn(TRANSPORT_FEE).setPreferredWidth(35);
         table.getColumnModel().getColumn(TRAINICONX).setPreferredWidth(35);
         table.getColumnModel().getColumn(TRAINICONY).setPreferredWidth(35);
         table.getColumnModel().getColumn(COMMENT_COLUMN).setPreferredWidth(70);
         table.getColumnModel().getColumn(UP_COLUMN).setPreferredWidth(60);
         table.getColumnModel().getColumn(DOWN_COLUMN).setPreferredWidth(70);
         table.getColumnModel().getColumn(DELETE_COLUMN).setPreferredWidth(80);
+
+        if (!Setup.isSaveTrainRevenuesEnabled()) {
+            table.getColumnModel().removeColumn(table.getColumnModel().getColumn(TRANSPORT_FEE));
+        }
 
         _frame.loadTableDetails(table);
         // does not use a table sorter
@@ -174,6 +187,8 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
                 return Bundle.getMessage("MaxLength");
             case GRADE:
                 return Bundle.getMessage("Grade");
+            case TRANSPORT_FEE:
+                return Bundle.getMessage("TransportFee");
             case TRAINICONX:
                 return Bundle.getMessage("X");
             case TRAINICONY:
@@ -200,6 +215,7 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
             case WAIT_COLUMN:
             case MAXLENGTH_COLUMN:
             case GRADE:
+            case TRANSPORT_FEE:
             case TRAINICONX:
             case TRAINICONY:
                 return String.class; 
@@ -232,6 +248,7 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
             case TIME_COLUMN:
             case MAXLENGTH_COLUMN:
             case GRADE:
+            case TRANSPORT_FEE:
             case TRAINICONX:
             case TRAINICONY:
             case COMMENT_COLUMN:
@@ -291,6 +308,8 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
                 return Integer.toString(rl.getMaxTrainLength());
             case GRADE:
                 return Double.toString(rl.getGrade());
+            case TRANSPORT_FEE:
+                return Integer.toString(rl.getTransportFee());
             case TRAINICONX:
                 return Integer.toString(rl.getTrainIconX());
             case TRAINICONY:
@@ -362,6 +381,9 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
                 break;
             case GRADE:
                 setGrade(value, rl);
+                break;
+            case TRANSPORT_FEE:
+                setTransportFee(value, rl);
                 break;
             case TRAINICONX:
                 setTrainIconX(value, rl);
@@ -510,6 +532,23 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
         } else {
             log.error("Maximum grade is 6 percent");
             JOptionPane.showMessageDialog(null, Bundle.getMessage("MaxGrade"), Bundle.getMessage("CanNotChangeGrade"),
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void setTransportFee(Object value, RouteLocation rl) {
+        int transportFee;
+        try {
+            transportFee = Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            log.error("transportFee must be a number");
+            return;
+        }
+        if (transportFee >= 0) {
+            rl.setTransportFee(transportFee);
+        } else {
+            log.error("Transport fee cannot be negative");
+            JOptionPane.showMessageDialog(null, Bundle.getMessage("MinTransportFee"), Bundle.getMessage("CanNotChangeTransportFee"),
                     JOptionPane.ERROR_MESSAGE);
         }
     }

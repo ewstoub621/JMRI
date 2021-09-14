@@ -7,6 +7,7 @@ import java.util.List;
 
 import javax.swing.*;
 
+import jmri.util.table.JTableWithColumnToolTips;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +33,7 @@ import jmri.swing.JTablePersistenceManager;
 public class RouteEditFrame extends OperationsFrame implements java.beans.PropertyChangeListener {
 
     RouteEditTableModel routeModel = new RouteEditTableModel();
-    JTable routeTable = new JTable(routeModel);
+    JTable routeTable = new JTableWithColumnToolTips(routeModel, routeModel.getTips());
     JScrollPane routePane;
 
     RouteManager routeManager;

@@ -313,6 +313,7 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
 
     private boolean generateCsvManifest = false; // when true generate csv manifest
     private boolean generateCsvSwitchList = false; // when true generate csv switch list
+    private boolean saveTrainRevenues = false; // when true generate csv revenue
     private boolean enableVsdPhysicalLocations = false;
 
     private boolean printLocationComments = false; // when true print location comments on the manifest
@@ -328,12 +329,45 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
     private boolean printPassengerLoad = false; // when true print passenger car load
     private boolean showTrackMoves = false; // when true show track moves in table
 
+    // train revenue default values
+    private String demurCredits = "2";
+    private String maxDiscount = "25";
+    private String demurrageRR = "100";
+    private String demurrageXX = "60";
+    private String cancelMulct = "150";
+    private String divertMulct = "250";
+    private String hazardFee = "150";
+    private String switchEmpty = "150";
+    private String switchLoads = "480";
+    private String switchAggrs = "250";
+    private String switchGrain = "250";
+    private String switchMetal = "300";
+    private String switchTanks = "250";
+    private String switchWoody = "350";
+
+    // train revenue parameter changes
+    public static final String REVENUE_CANCELLED_MULCT_CHANGE = "revenueCancelledMulctChange";
+    public static final String REVENUE_DEMURRAGE_RR_CHANGE = "revenueDemurrageRRChange";
+    public static final String REVENUE_DEMURRAGE_XX_CHANGE = "revenueDemurrageXXChange";
+    public static final String REVENUE_DEMUR_CREDIT_DAYS_CHANGE = "revenueDemurCreditDaysChange";
+    public static final String REVENUE_DIVERSION_MULCT_CHANGE = "revenueDiversionMulctChange";
+    public static final String REVENUE_HAZARD_FEE_CHANGE = "revenueHazardFeeChange";
+    public static final String REVENUE_MAX_DISCOUNT_CHANGE = "revenueMaxDiscountChange";
+    public static final String REVENUE_SWITCHING_EMPTY_CHANGE = "revenueSwitchingEmptyChange";
+    public static final String REVENUE_SWITCHING_LOADS_CHANGE = "revenueSwitchingLoadsChange";
+    public static final String REVENUE_SWITCHING_AGGRS_CHANGE = "revenueSwitchingAggrsChange";
+    public static final String REVENUE_SWITCHING_GRAIN_CHANGE = "revenueSwitchingGrainChange";
+    public static final String REVENUE_SWITCHING_METAL_CHANGE = "revenueSwitchingMetalChange";
+    public static final String REVENUE_SWITCHING_TANKS_CHANGE = "revenueSwitchingTanksChange";
+    public static final String REVENUE_SWITCHING_WOODY_CHANGE = "revenueSwitchingWoodyChange";
+
     // property changes
     public static final String SWITCH_LIST_CSV_PROPERTY_CHANGE = "setupSwitchListCSVChange"; // NOI18N
     public static final String MANIFEST_CSV_PROPERTY_CHANGE = "setupManifestCSVChange"; // NOI18N
     public static final String REAL_TIME_PROPERTY_CHANGE = "setupSwitchListRealTime"; // NOI18N
     public static final String SHOW_TRACK_MOVES_PROPERTY_CHANGE = "setupShowTrackMoves"; // NOI18N
     public static final String SAVE_TRAIN_MANIFEST_PROPERTY_CHANGE = "saveTrainManifestChange"; // NOI18N
+    public static final String SAVE_TRAIN_REVENUE_PROPERTY_CHANGE = "saveTrainRevenueChange"; // NOI18N
     public static final String ALLOW_CARS_TO_RETURN_PROPERTY_CHANGE = "allowCarsToReturnChange"; // NOI18N
     public static final String TRAIN_DIRECTION_PROPERTY_CHANGE = "setupTrainDirectionChange"; // NOI18N
 
@@ -586,6 +620,23 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
             InstanceManager.getDefault(TrainManagerXml.class).createDefaultCsvManifestDirectory();
         }
         setDirtyAndFirePropertyChange(MANIFEST_CSV_PROPERTY_CHANGE, old, enabled);
+    }
+
+    public static boolean isSaveTrainRevenuesEnabled() {
+        return getDefault().saveTrainRevenues;
+    }
+
+    public static void setSaveTrainRevenuesEnabled(boolean enabled) {
+        boolean old = getDefault().saveTrainRevenues;
+        getDefault().saveTrainRevenues = enabled;
+        if (enabled && !old) {
+            InstanceManager.getDefault(TrainManagerXml.class).createDefaultTrainCsvRevenueDirectory();
+        }
+        setDirtyAndFirePropertyChange(SAVE_TRAIN_REVENUE_PROPERTY_CHANGE, old, enabled);
+    }
+
+    public static String getMessage(String key) {
+        return Bundle.getMessage(key);
     }
 
     public static boolean isGenerateCsvSwitchListEnabled() {
@@ -1683,6 +1734,125 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
         }
     }
 
+    // train revenue accessors
+    public static String getSwitchEmpty()         { return getDefault().switchEmpty; }
+    public static String getSwitchLoads()         { return getDefault().switchLoads; }
+    public static String getSwitchAggrs()         { return getDefault().switchAggrs; }
+    public static String getSwitchGrain()         { return getDefault().switchGrain; }
+    public static String getSwitchMetal()         { return getDefault().switchMetal; }
+    public static String getSwitchWoody()         { return getDefault().switchWoody; }
+    public static String getSwitchTanks()         { return getDefault().switchTanks; }
+    public static String getHazardFee()           { return getDefault().hazardFee; }
+    public static String getDivertMulct()         { return getDefault().divertMulct; }
+    public static String getCancelMulct()         { return getDefault().cancelMulct; }
+    public static String getDemurrageRR()         { return getDefault().demurrageRR; }
+    public static String getDemurrageXX()         { return getDefault().demurrageXX; }
+    public static String getDemurCredits()        { return getDefault().demurCredits; }
+    public static String getMaxDiscount()         { return getDefault().maxDiscount; }
+
+    public static void setDemurCredits(String demurCredits) {
+        String old = getDefault().demurCredits;
+        getDefault().demurCredits = demurCredits;
+        if (old == null || !old.equals(demurCredits)) {
+            setDirtyAndFirePropertyChange(REVENUE_DEMUR_CREDIT_DAYS_CHANGE, old, demurCredits);
+        }
+    }
+    public static void setDemurrageRR(String demurrageRR) {
+        String old = getDefault().demurrageRR;
+        getDefault().demurrageRR = demurrageRR;
+        if (old == null || !old.equals(demurrageRR)) {
+            setDirtyAndFirePropertyChange(REVENUE_DEMURRAGE_RR_CHANGE, old, demurrageRR);
+        }
+    }
+    public static void setDemurrageXX(String demurrageXX) {
+        String old = getDefault().demurrageXX;
+        getDefault().demurrageXX = demurrageXX;
+        if (old == null || !old.equals(demurrageXX)) {
+            setDirtyAndFirePropertyChange(REVENUE_DEMURRAGE_XX_CHANGE, old, demurrageXX);
+        }
+    }
+    public static void setSwitchEmpty(String switchEmpty) {
+        String old = getDefault().switchEmpty;
+        getDefault().switchEmpty = switchEmpty;
+        if (old == null || !old.equals(switchEmpty)) {
+            setDirtyAndFirePropertyChange(REVENUE_SWITCHING_EMPTY_CHANGE, old, switchEmpty);
+        }
+    }
+    public static void setSwitchLoads(String switchLoads) {
+        String old = getDefault().switchLoads;
+        getDefault().switchLoads = switchLoads;
+        if (old == null || !old.equals(switchLoads)) {
+            setDirtyAndFirePropertyChange(REVENUE_SWITCHING_LOADS_CHANGE, old, switchLoads);
+        }
+    }
+    public static void setSwitchAggrs(String switchAggrs) {
+        String old = getDefault().switchAggrs;
+        getDefault().switchAggrs = switchAggrs;
+        if (old == null || !old.equals(switchAggrs)) {
+            setDirtyAndFirePropertyChange(REVENUE_SWITCHING_AGGRS_CHANGE, old, switchAggrs);
+        }
+    }
+    public static void setSwitchGrain(String switchGrain) {
+        String old = getDefault().switchGrain;
+        getDefault().switchGrain = switchGrain;
+        if (old == null || !old.equals(switchGrain)) {
+            setDirtyAndFirePropertyChange(REVENUE_SWITCHING_GRAIN_CHANGE, old, switchGrain);
+        }
+    }
+    public static void setSwitchMetal(String switchMetal) {
+        String old = getDefault().switchMetal;
+        getDefault().switchMetal = switchMetal;
+        if (old == null || !old.equals(switchMetal)) {
+            setDirtyAndFirePropertyChange(REVENUE_SWITCHING_METAL_CHANGE, old, switchMetal);
+        }
+    }
+    public static void setSwitchWoody(String switchWoody) {
+        String old = getDefault().switchWoody;
+        getDefault().switchWoody = switchWoody;
+        if (old == null || !old.equals(switchWoody)) {
+            setDirtyAndFirePropertyChange(REVENUE_SWITCHING_WOODY_CHANGE, old, switchWoody);
+        }
+    }
+    public static void setSwitchTanks(String switchTanks) {
+        String old = getDefault().switchTanks;
+        getDefault().switchTanks = switchTanks;
+        if (old == null || !old.equals(switchTanks)) {
+            setDirtyAndFirePropertyChange(REVENUE_SWITCHING_TANKS_CHANGE, old, switchTanks);
+        }
+    }
+    public static void setCancelMulct(String cancelMulct) {
+        String old = getDefault().cancelMulct;
+        getDefault().cancelMulct = cancelMulct;
+        if (old == null || !old.equals(cancelMulct)) {
+            setDirtyAndFirePropertyChange(REVENUE_CANCELLED_MULCT_CHANGE, old, cancelMulct);
+        }
+    }
+    public static void setDivertMulct(String divertMulct) {
+        String old = getDefault().divertMulct;
+        getDefault().divertMulct = divertMulct;
+        if (old == null || !old.equals(divertMulct)) {
+            setDirtyAndFirePropertyChange(REVENUE_DIVERSION_MULCT_CHANGE, old, divertMulct);
+        }
+    }
+    public static void setHazardFee(String hazardFee) {
+        String old = getDefault().hazardFee;
+        getDefault().hazardFee = hazardFee;
+        if (old == null || !old.equals(hazardFee)) {
+            setDirtyAndFirePropertyChange(REVENUE_HAZARD_FEE_CHANGE, old, hazardFee);
+        }
+    }
+    public static void setMaxDiscount(String maxDiscount) {
+        String old = getDefault().maxDiscount;
+        getDefault().maxDiscount = maxDiscount;
+        if (old == null || !old.equals(maxDiscount)) {
+            setDirtyAndFirePropertyChange(REVENUE_MAX_DISCOUNT_CHANGE, old, maxDiscount);
+        }
+    }
+
+    /**
+     *
+     * @return JComboBox
+     */
     public static JComboBox<String> getManifestFormatComboBox() {
         JComboBox<String> box = new JComboBox<>();
         box.addItem(STANDARD_FORMAT);
@@ -1996,6 +2166,7 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
         values.setAttribute(Xml.STAGING_TRY_NORMAL, isStagingTryNormalBuildEnabled() ? Xml.TRUE : Xml.FALSE);
 
         values.setAttribute(Xml.GENERATE_CSV_MANIFEST, isGenerateCsvManifestEnabled() ? Xml.TRUE : Xml.FALSE);
+        values.setAttribute(Xml.GENERATE_CSV_REVENUE, isSaveTrainRevenuesEnabled() ? Xml.TRUE : Xml.FALSE);
         values.setAttribute(Xml.GENERATE_CSV_SWITCH_LIST, isGenerateCsvSwitchListEnabled() ? Xml.TRUE : Xml.FALSE);
 
         e.addContent(values = new Element(Xml.BUILD_REPORT));
@@ -2047,6 +2218,24 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
         e.addContent(values = new Element(Xml.CATS));
         values.setAttribute(Xml.EXACT_LOCATION_NAME,
                 AbstractOperationsServer.isExactLoationNameEnabled() ? Xml.TRUE : Xml.FALSE);
+
+        // revenue parameters
+        e.addContent(values = new Element(Xml.REVENUE_PARAMETERS));
+        values.setAttribute(Xml.REVENUE_MAX_DISCOUNT, getMaxDiscount());
+        values.setAttribute(Xml.REVENUE_ADDED_HAZARD_FEE, getHazardFee());
+        values.setAttribute(Xml.REVENUE_DEMURRAGE_RR, getDemurrageRR());
+        values.setAttribute(Xml.REVENUE_DEMURRAGE_XX, getDemurrageXX());
+        values.setAttribute(Xml.REVENUE_CANCELLED_MULCT, getCancelMulct());
+        values.setAttribute(Xml.REVENUE_DIVERSION_MULCT, getDivertMulct());
+        values.setAttribute(Xml.REVENUE_SWITCHING_EMPTY, getSwitchEmpty());
+        values.setAttribute(Xml.REVENUE_SWITCHING_LOADS, getSwitchLoads());
+        values.setAttribute(Xml.REVENUE_SWITCHING_AGGRS, getSwitchAggrs());
+        values.setAttribute(Xml.REVENUE_SWITCHING_GRAIN, getSwitchGrain());
+        values.setAttribute(Xml.REVENUE_SWITCHING_METAL, getSwitchMetal());
+        values.setAttribute(Xml.REVENUE_SWITCHING_WOODY, getSwitchWoody());
+        values.setAttribute(Xml.REVENUE_SWITCHING_TANKS, getSwitchTanks());
+        values.setAttribute(Xml.REVENUE_DEMUR_CREDIT_DAYS, getDemurCredits());
+
         return e;
     }
 
@@ -2690,6 +2879,11 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
                 log.debug("generateCvsSwitchList: {}", enable);
                 getDefault().generateCsvSwitchList = enable.equals(Xml.TRUE);
             }
+            if ((a = operations.getChild(Xml.BUILD_OPTIONS).getAttribute(Xml.GENERATE_CSV_REVENUE)) != null) {
+                String enable = a.getValue();
+                log.debug("generateCvsRevenue: {}", enable);
+                getDefault().saveTrainRevenues = enable.equals(Xml.TRUE);
+            }
         }
         if (operations.getChild(Xml.BUILD_REPORT) != null) {
             if ((a = operations.getChild(Xml.BUILD_REPORT).getAttribute(Xml.LEVEL)) != null) {
@@ -2896,6 +3090,23 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
                 log.debug("trainLogger: {}", enable);
                 getDefault().trainLogger = enable.equals(Xml.TRUE);
             }
+        }
+
+        if (operations.getChild(Xml.REVENUE_PARAMETERS) != null) {
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_MAX_DISCOUNT))         != null) { setMaxDiscount(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_ADDED_HAZARD_FEE))     != null) { setHazardFee(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_DEMURRAGE_RR))         != null) { setDemurrageRR(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_DEMURRAGE_XX))         != null) { setDemurrageXX(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_CANCELLED_MULCT))      != null) { setCancelMulct(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_DIVERSION_MULCT))      != null) { setDivertMulct(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_SWITCHING_EMPTY))      != null) { setSwitchEmpty(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_SWITCHING_LOADS))      != null) { setSwitchLoads(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_SWITCHING_AGGRS))      != null) { setSwitchAggrs(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_SWITCHING_GRAIN))      != null) { setSwitchGrain(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_SWITCHING_METAL))      != null) { setSwitchMetal(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_SWITCHING_WOODY))      != null) { setSwitchWoody(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_SWITCHING_TANKS))      != null) { setSwitchTanks(a.getValue()); }
+            if ((a = operations.getChild(Xml.REVENUE_PARAMETERS).getAttribute(Xml.REVENUE_DEMUR_CREDIT_DAYS))    != null) { setDemurCredits(a.getValue()); }
         }
     }
 

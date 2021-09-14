@@ -213,4 +213,22 @@ public class Xml {
     static final String CATS = "CATS"; // NOI18N
     static final String EXACT_LOCATION_NAME = "exactLocationName"; // NOI18N
 
+    static final String GENERATE_CSV_REVENUE = "generateCsvRevenue"; // NOI18N
+    static final String REVENUE_PARAMETERS = "RevenueParameters"; // NOI18N
+    static final String REVENUE_SWITCHING_EMPTY = "SwitchingEmpty"; // NOI18N
+    static final String REVENUE_SWITCHING_LOADS = "SwitchingLoads"; // NOI18N
+    static final String REVENUE_SWITCHING_AGGRS = "SwitchingAggrs"; // NOI18N
+    static final String REVENUE_SWITCHING_GRAIN = "SwitchingGrain"; // NOI18N
+    static final String REVENUE_SWITCHING_METAL = "SwitchingMetal"; // NOI18N
+    static final String REVENUE_SWITCHING_WOODY = "SwitchingWoody"; // NOI18N
+    static final String REVENUE_SWITCHING_TANKS = "SwitchingTanks"; // NOI18N
+    static final String REVENUE_TRANSPORT_RATE = "RouteRate"; // NOI18N
+    static final String REVENUE_ADDED_HAZARD_FEE = "AddedHazardFee"; // NOI18N
+    static final String REVENUE_CANCELLED_MULCT = "CancelledMulct"; // NOI18N
+    static final String REVENUE_DIVERSION_MULCT = "DiversionMulct"; // NOI18N
+    static final String REVENUE_DEMURRAGE_RR = "DemurrageRR"; // NOI18N
+    static final String REVENUE_DEMURRAGE_XX = "DemurrageXX"; // NOI18N
+    static final String REVENUE_DEMUR_CREDIT_DAYS = "DemurrageCredits"; // NOI18N
+    static final String REVENUE_MAX_DISCOUNT = "MaximumDiscount"; // NOI18N
+
 }

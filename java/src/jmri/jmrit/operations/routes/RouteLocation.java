@@ -40,6 +40,7 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     protected boolean _pickups = true; // when true pick ups allowed at this location
     protected int _sequenceNum = 0; // used to determine location order in a route
     protected double _grade = 0; // maximum grade between locations
+    protected int _transportFee = 20; // transport fee per car between locations
     protected int _wait = 0; // wait time at this location
     protected String _departureTime = NONE; // departure time from this location
     protected int _trainIconX = 0; // the x & y coordinates for the train icon
@@ -401,6 +402,19 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
         return _grade;
     }
 
+    @SuppressFBWarnings(value = "FE_FLOATING_POINT_EQUALITY", justification = "firing property change doesn't matter")
+    public void setTransportFee(int transportFee) {
+        int old = _transportFee;
+        _transportFee = transportFee;
+        if (old != transportFee) {
+            setDirtyAndFirePropertyChange("transportFee", Integer.toString(old), Integer.toString(transportFee)); // NOI18N
+        }
+    }
+
+    public int getTransportFee() {
+        return _transportFee;
+    }
+
     public void setTrainIconX(int x) {
         int old = _trainIconX;
         _trainIconX = x;
@@ -628,6 +642,7 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
         e.setAttribute(Xml.TRAIN_DIRECTION, Integer.toString(getTrainDirection()));
         e.setAttribute(Xml.MAX_TRAIN_LENGTH, Integer.toString(getMaxTrainLength()));
         e.setAttribute(Xml.GRADE, Double.toString(getGrade()));
+        e.setAttribute(Xml.TRANSPORT_FEE, Double.toString(getTransportFee()));
         e.setAttribute(Xml.MAX_CAR_MOVES, Integer.toString(getMaxCarMoves()));
         e.setAttribute(Xml.RANDOM_CONTROL, getRandomControl());
         e.setAttribute(Xml.PICKUPS, isPickUpAllowed() ? Xml.YES : Xml.NO);

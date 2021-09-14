@@ -21,6 +21,7 @@ public class OptionPanel extends OperationsPreferencesPanel {
     // labels
     // major buttons
     JButton saveButton = new JButton(Bundle.getMessage("ButtonSave"));
+    JButton editButton = new JButton(Bundle.getMessage("EditRevenueParameters"));
 
     // radio buttons
     JRadioButton buildNormal = new JRadioButton(Bundle.getMessage("Normal"));
@@ -55,6 +56,7 @@ public class OptionPanel extends OperationsPreferencesPanel {
 
     JCheckBox enableVsdCheckBox = new JCheckBox(Bundle.getMessage("EnableVSD"));
     JCheckBox saveTrainManifestCheckBox = new JCheckBox(Bundle.getMessage("SaveManifests"));
+    JCheckBox saveTrainRevenuesCheckBox = new JCheckBox(Bundle.getMessage("SaveTrainRevenues"));
 
     // text field
     JTextField rfidTextField = new JTextField(10);
@@ -91,6 +93,7 @@ public class OptionPanel extends OperationsPreferencesPanel {
 
         generateCvsManifestCheckBox.setSelected(Setup.isGenerateCsvManifestEnabled());
         generateCvsSwitchListCheckBox.setSelected(Setup.isGenerateCsvSwitchListEnabled());
+        saveTrainRevenuesCheckBox.setSelected(Setup.isSaveTrainRevenuesEnabled());
         valueCheckBox.setSelected(Setup.isValueEnabled());
         rfidCheckBox.setSelected(Setup.isRfidEnabled());
         enableVsdCheckBox.setSelected(Setup.isVsdPhysicalLocationEnabled());
@@ -101,6 +104,7 @@ public class OptionPanel extends OperationsPreferencesPanel {
 
         // add tool tips
         saveButton.setToolTipText(Bundle.getMessage("SaveToolTip"));
+        editButton.setToolTipText(Bundle.getMessage("EditRevenueParametersToolTip"));
         rfidTextField.setToolTipText(Bundle.getMessage("EnterNameRfidTip"));
         valueTextField.setToolTipText(Bundle.getMessage("EnterNameValueTip"));
         stagingTurnCheckBox.setToolTipText(Bundle.getMessage("AlsoAvailablePerTrain"));
@@ -189,11 +193,13 @@ public class OptionPanel extends OperationsPreferencesPanel {
         pOption.setLayout(new GridBagLayout());
         pOption.setBorder(BorderFactory.createTitledBorder(Bundle.getMessage("BorderLayoutOptions")));
         addItemLeft(pOption, saveTrainManifestCheckBox, 1, 1);
-        addItemLeft(pOption, valueCheckBox, 1, 2);
-        addItemLeft(pOption, valueTextField, 2, 2);
-        addItemLeft(pOption, rfidCheckBox, 1, 3);
-        addItemLeft(pOption, rfidTextField, 2, 3);
-        addItemLeft(pOption, enableVsdCheckBox, 1, 4);
+        addItemLeft(pOption, saveTrainRevenuesCheckBox, 1, 2);
+        addItemLeft(pOption, editButton, 2, 2);
+        addItemLeft(pOption, valueCheckBox, 1, 3);
+        addItemLeft(pOption, valueTextField, 2, 3);
+        addItemLeft(pOption, rfidCheckBox, 1, 4);
+        addItemLeft(pOption, rfidTextField, 2, 4);
+        addItemLeft(pOption, enableVsdCheckBox, 1, 5);
 
         // row 11
         JPanel pControl = new JPanel();
@@ -211,6 +217,7 @@ public class OptionPanel extends OperationsPreferencesPanel {
 
         // setup buttons
         addButtonAction(saveButton);
+        addButtonAction(editButton);
 
         // radio buttons
         ButtonGroup buildGroup = new ButtonGroup();
@@ -268,6 +275,11 @@ public class OptionPanel extends OperationsPreferencesPanel {
             if (Setup.isCloseWindowOnSaveEnabled()) {
                 dispose();
             }
+        }
+        if (ae.getSource() == editButton) {
+            TrainRevenueParametersFrame f = new TrainRevenueParametersFrame();
+            f.initComponents();
+            f.setVisible(true);
         }
     }
 
@@ -327,6 +339,7 @@ public class OptionPanel extends OperationsPreferencesPanel {
         Setup.setGenerateCsvManifestEnabled(generateCvsManifestCheckBox.isSelected());
         Setup.setGenerateCsvSwitchListEnabled(generateCvsSwitchListCheckBox.isSelected());
         Setup.setSaveTrainManifestsEnabled(saveTrainManifestCheckBox.isSelected());
+        Setup.setSaveTrainRevenuesEnabled(saveTrainRevenuesCheckBox.isSelected());
         Setup.setValueEnabled(valueCheckBox.isSelected());
         Setup.setValueLabel(valueTextField.getText());
         Setup.setRfidEnabled(rfidCheckBox.isSelected());
@@ -374,7 +387,8 @@ public class OptionPanel extends OperationsPreferencesPanel {
                 Setup.getValueLabel().equals(valueTextField.getText()) &&
                 Setup.isRfidEnabled() == rfidCheckBox.isSelected() &&
                 Setup.getRfidLabel().equals(rfidTextField.getText()) &&
-                Setup.isSaveTrainManifestsEnabled() == saveTrainManifestCheckBox.isSelected()
+                Setup.isSaveTrainManifestsEnabled() == saveTrainManifestCheckBox.isSelected() &&
+                Setup.isSaveTrainRevenuesEnabled() == saveTrainRevenuesCheckBox.isSelected()
                 // Logging enabled?
                 &&
                 Setup.isEngineLoggerEnabled() == engineLoggerCheckBox.isSelected() &&

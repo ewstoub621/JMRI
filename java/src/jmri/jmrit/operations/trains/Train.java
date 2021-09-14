@@ -14,6 +14,7 @@ import java.util.Locale;
 import javax.annotation.Nonnull;
 import javax.swing.JOptionPane;
 
+import jmri.jmrit.operations.setup.TrainRevenues;
 import org.jdom2.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -2845,6 +2846,11 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         setSwitchListStatus(UNKNOWN);
         // run after build scripts
         runScripts(getAfterBuildScripts());
+        if (Setup.isSaveTrainRevenuesEnabled()) {
+            TrainRevenues trainRevenues = getTrainRevenues();
+            trainRevenues.deleteTrainRevenuesSerFile(this);
+            trainRevenues.loadOrigRouteIds();
+        }
         return results;
     }
 
@@ -3114,6 +3120,9 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         }
         RouteLocation rl = getCurrentRouteLocation();
         RouteLocation rlNext = getNextRouteLocation(rl);
+        if (Setup.isSaveTrainRevenuesEnabled()) {
+            getTrainRevenues().updateCarRevenues(rl);
+        }
 
         setCurrentLocation(rlNext);
 
@@ -3123,6 +3132,9 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         updateStatus(rl, rlNext);
         // tell GUI that train has complete its move
         setDirtyAndFirePropertyChange(TRAIN_MOVE_COMPLETE_CHANGED_PROPERTY, rl, rlNext);
+        if (!this.isBuilt() && Setup.isSaveTrainRevenuesEnabled()) {
+            getTrainRevenues().getCsvRevenueFile(this);
+        }
     }
 
     /**
@@ -3464,6 +3476,7 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         setBuildFailedMessage(NONE);
         setPrinted(false);
         setModified(false);
+        setTrainRevenues(null);
         // remove cars and engines from this train via property change
         setStatusCode(CODE_TRAIN_RESET);
         // remove train icon
@@ -4153,6 +4166,20 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
     protected void setDirtyAndFirePropertyChange(String p, Object old, Object n) {
         InstanceManager.getDefault(TrainManagerXml.class).setDirty(true);
         firePropertyChange(p, old, n);
+    }
+
+    TrainRevenues _trainRevenues;
+
+    protected TrainRevenues getTrainRevenues() {
+        if (_trainRevenues == null && Setup.isSaveTrainRevenuesEnabled()) {
+            setTrainRevenues(TrainRevenues.getTrainRevenues(this));
+        }
+
+        return _trainRevenues;
+    }
+
+    public void setTrainRevenues(TrainRevenues trainRevenues) {
+        _trainRevenues = trainRevenues;
     }
 
     private final static Logger log = LoggerFactory.getLogger(Train.class);
