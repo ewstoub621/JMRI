@@ -1885,7 +1885,7 @@
        to location along the route, it becomes possible to modify that schedule, by cancelling scheduled pick up
        or set out actions for a car, picking up an unscheduled car from a location, or setting out a car at a different
        location than originally scheduled. Such <i>en route</i> changes trigger either cancellation or diversion mulcts
-       (penalty charges) against the customer. The train revenue report is a CVS file as described below.
+       (penalty charges) against the customer. The train revenue report is a CSV file as described below.
      </p>
      <p>
        Please note: the <i>revenues</i> being reported are virtual, not actual, of course. The report is meant to
@@ -1897,30 +1897,31 @@
      </p>
      <p>
        The train revenue report lists <i>Customers</i>. This is a broader category than <i>Industries</i>, which
-       generate loads of products and often consume loads of raw materials. A customer may be an industry or may only
-       be a consumer of goods. Customers are associated with spurs, either by ownership or by lease arrangements. For
-       convenience, the train revenue report uses spur names for customer names. If one customer has two or more
-       spurs, spur names should be prefixed by the customer name, appended by "-1", "-2", etc., so the revenue across
-       the set of spurs can be combined. The more spur capacity (total spur length) the customer has, the more
-       railroad freight cars and services it is likely to use. Traditionally, larger customers merit bigger
-       discounts, so the discount algorithm for train revenue calculates customer discounts in proportion to customer
-       capacity.
+       generate loads of products and often consume loads of raw materials. A <i>customer</i> may be an industry or may
+       only be a consumer of goods. Customers are associated with spurs, either by ownership or by lease
+       arrangements. For convenience, the train revenue report uses spur names for customer names. If one customer
+       has two or more spurs, spur names should be prefixed by the customer name, appended by "-1", "-2", etc., so
+       the revenue across the set of spurs can be combined. The more spur capacity (total spur length) the customer
+       has, the more railroad freight cars and services it is likely to use. Traditionally, larger customers merit
+       bigger discounts, so the discount algorithm for train revenue calculates customer discounts in proportion to
+       customer capacity.
      </p>
      <p>
        There will be a future effort to generate train <i>expense</i> reports as well, ultimately providing enough
        data to produce the historic Operating Ratio (<i>OR</i>), which is the ratio of total expenses to total
-       revenue. For this release, you are only obtain train <i>revenue</i> details and totals. Once the ability
-       exists to also calculate train <i>expenses</i>, you would also be able to obtain a train-by-train <i>OR</i>,
-       but not a <i>Railroad</i> OR (unless you accumulate totals from the CSV files over a period of time). Note that
-       either type of <i>OR</i> is a lower-the-better measure, traditionally targeted to stay below 80%.
+       revenue. For this release, you can only obtain train <i>revenue</i> details and totals. Once the ability
+       exists to also calculate train <i>expenses</i>, you would then be able to obtain a train-by-train <i>OR</i>
+       (not a <i>Railroad</i> OR, unless you accumulate totals from the CSV files for a particular railroad over a
+       period of time). Note that either type of <i>OR</i>, train or railroad, is a lower-the-better measure,
+       traditionally targeted to stay below 80%.
      </p>
       <p>
        The Operating Ratio has long been a major measure of profitability in the railroad industry and is the
         opposite of Operating Margin used by most other industries. The <i>OR</i> does not include debt service, which
         can easily overwhelm the gap between expenses and revenue and often resulted in railroad bankruptcies. Total
         train expenses would be the sum of train operating expenses, such as fuel, labor, depreciation, and
-        maintenance. It would be up to you to accumulate retrospective views of revenues and expenses, perhaps to
-        evaluate your Railroad <i>OR</i>, or to more fully understand why diesel replace steam in the transition era.
+        maintenance. It would again be up to you to accumulate retrospective views of revenues and expenses, perhaps to
+        evaluate your Railroad <i>OR</i>, or to more fully understand why diesel replaced steam in the transition era.
      </p>
      <p>
        Note that OperationsPro&trade; will save detailed train revenue data as a temporary <i>.ser</i> file, between
@@ -1935,12 +1936,14 @@
        same directory.
      </p>
       <p>
-        OperationsPro™ will save a train's revenue analysis as a CSV (comma separated values) file, generated for
-        the train's gross revenue, in that same directory. This CSV file can be opened by any spreadsheet program
-        which will parse the file's comma separated values as cells in a spreadsheet table. While Excel is commonly
-        used for this purpose, the Numbers application on macOS does a credible job of rendering CSV files, and was
-        used to create images of train revenue CSV files below. The CSV revenues file uses the same codes and
-        descriptions as the CSV switch lists, plus the following:
+        OperationsPro™ will save a train's revenue analysis as a CSV file, generated for the train's gross revenue,
+        in that same directory. This CSV file can be opened by any spreadsheet program which will parse the file's
+        comma separated values as cells in a spreadsheet table. While Excel is commonly used for this purpose, the
+        Numbers application on macOS does a credible job of rendering CSV files, and was used to create images of
+        train revenue CSV files below.
+      </p>
+      <p>
+        The train revenues file uses the same codes and descriptions as the CSV switch lists, plus the following:
       </p>
 
       <table>
@@ -1976,18 +1979,41 @@
        This panel permits modifications of all the general revenue parameters for railroad operations, including
        switching, handling, and demurrage fees, as well as cancellation and diversion mulcts, per freight car, plus a
        maximum discount rate (in whole percentage units) provided for railroad customers. The currency values in this
-       panel are integer values of the currency in the locale your computer is using to run JMRI. In the US, these
-       would be whole dollar amounts. In France, for instance, they would be whole euros (symbol €); in the UK, they
-       would be pounds sterling (symbol: £). It might be helpful to change these values to be typical of currency
-       values in your locale, region, and the era of your railroad, in order to produce more suitable train revenues.
+       panel are integer values of the currency for the locale your computer uses to run JMRI. In the US, these
+       would represent whole dollar amounts. In France, for instance, they would represent whole euros (symbol €); in
+       the UK, they would represent pounds sterling (symbol: £). It might be helpful to change these values to be
+       typical of currency values in your locale, region, and the era of your railroad, in order to produce more
+       suitable train revenues.
      </p>
-      <p>
-       The demurrage credit days represents the count of passing trains servicing the spur, e.g. one per day,
-       which are allowed for loading or unloading a freight car upon its arrival on the spur. Each train that
-       passes decrements the remaining wait for a car until the wait time expires. If the initial wait time, as
-       specified in by the car's schedule (see <a href="#Schedules">Schedules</a>), exceeds the credit limit, a
-       demurrage fee is applied as each servicing train passes, until the remaining wait value falls below the limit.
-     </p>
+      <h5>Demurrage</h5>
+        <p style = "margin-left: 25px">
+          <i>Demurrage</i> may be a new term for many. According to Merriam-Webster, it dates back to 1641, when it was
+          defined as the detention of a ship by the freighter beyond the time allowed for loading, unloading, or
+          sailing. The word was adapted from Old French "demeurer" - to linger or tarry. The English word "demur" comes
+          to mind. From the beginning, demurrage was considered a charge by the carrier to the owner of the port for
+          taking too much time to load or unload the vessel, thereby delaying the vessel's release to travel on to
+          its next destination. The application to railroading is straightforward. Demurrage has been a source of
+          railroad revenue from its very beginning. This term is still used today, as anyone who has been a railroad
+          customer for long can attest.
+        </p>
+        <p style = "margin-left: 25px">
+         The demurrage credit days value is the allowance given by the railroad for time to load or unload a car upon
+          delivery. The unit of value represents the count of passing trains servicing the spur, typically one per day
+          for Class III railroads. When a car is delivered to a spur, a wait time is assigned according to the spur
+          schedule (see <a href="#Schedules">Schedules</a>), if one exists. Otherwise, the wait time is zero and the
+          car is assumed to be loaded or unloaded, and therefore released for pickup before the next passing train.
+        </p>
+        <p style = "margin-left: 25px">
+          Each train that passes will decrement any remaining wait count for a waiting car until the wait count reaches
+          zero, at which point the car is assumed to have been (finally) loaded or unloaded and released for transport.
+          If the initial wait time, as specified by the spur's schedule, exceeds the credit limit, a demurrage fee
+          is applied as each servicing train passes, until the remaining wait value falls below the limit.
+        </p>
+        <p style = "margin-left: 25px">
+          For example, if a wait time of 4 were applied to a car, with a demurrage credit days value is 2, then a
+          single demurrage charge would be applied as revenue for the next 2 passing trains. The car would then be
+          released for pickup by the 4th passing train.
+         </p>
       <p>
         The only other parameter affecting train revenue is the route fee (see <a href= "#EditRoute">Edit Route</a>).
         The "Fee" value is the charge to transport any freight car from each location to the next along the train's
@@ -5198,7 +5224,7 @@
       "#SwitchListByLocation">Switch Lists by Location</a> window. It will create CSV files for
       each of the locations selected in the window'
       <h5>Generate Switch List Changes</h5>
-      This action works like the "Generate CVS Switch List Changes" button in the <a href=
+      This action works like the "Generate CSV Switch List Changes" button in the <a href=
       "#SwitchListByLocation">Switch Lists by Location</a> window. There has to be new work at one
       of the locations selected in the <a href="#SwitchListByLocation">Switch Lists by Location</a>
       window for this action to succeed.
