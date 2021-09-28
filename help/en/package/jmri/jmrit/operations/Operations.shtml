@@ -122,6 +122,9 @@
                       <ul>
                         <li>
                           <a href="#SaveTrainManifests">Save Train Manifests</a>
+                        <li>
+                          <a href="#SaveTrainRevenues">Save Train Revenues</a>
+                        </li>
                         </li>
 
                         <li>
@@ -1872,10 +1875,144 @@
       in a directory called "switchListBackups" located in the "operations" directory. A separate
       directory is created for each location's switch list that you create.</p>
 
-      <h4 id="EnableValueFields">Enable Value Fields</h4>
-      You can use the value field to enter the value or cost of your rolling stock. You can rename
-      the value field if you wish and use it for other purposes.
-      <h4 id="EnableIdentificationTagFields">Enable Identification Tag Fields</h4>
+   <a name="SaveTrainRevenues" id="SaveTrainRevenues"></a>
+   <h4>Save Train Revenues</h4>
+     <p>
+       When the <i>Save Train Revenues</i> option is selected, OperationsPro™ will track individual car movements in
+       a train, accumulating the train's revenue data, for each freight car, in order to generate the train revenue
+       report upon completing all its moves (termination). The original schedule for freight car pick ups and set
+       outs is created when the train is built. If the Conductor feature is used to move the train from location
+       to location along the route, it becomes possible to modify that schedule, by cancelling scheduled pick up
+       or set out actions for a car, picking up an unscheduled car from a location, or setting out a car at a different
+       location than originally scheduled. Such <i>en route</i> changes trigger either cancellation or diversion mulcts
+       (penalty charges) against the customer. The train revenue report is a CVS file as described below.
+     </p>
+     <p>
+       Please note: the <i>revenues</i> being reported are virtual, not actual, of course. The report is meant to
+       provide some insight into why railroads operate trains, e.g. Class III  short line (local freight, peddler
+       freight or way-freight) trains. Railroads operate trains in order to gain sufficient revenue from customers to
+       offset expenses and generate net profits. Revenue reports will be made on a train-by-train basis. It would be up
+       to you to accumulate retrospective views of these data, perhaps to competitively measure crew operational
+       performance over time... <i>Go Teams!</i>
+     </p>
+     <p>
+       The train revenue report lists <i>Customers</i>. This is a broader category than <i>Industries</i>, which
+       generate loads of products and often consume loads of raw materials. A customer may be an industry or may only
+       be a consumer of goods. Customers are associated with spurs, either by ownership or by lease arrangements. For
+       convenience, the train revenue report uses spur names for customer names. If one customer has two or more
+       spurs, spur names should be prefixed by the customer name, appended by "-1", "-2", etc., so the revenue across
+       the set of spurs can be combined. The more spur capacity (total spur length) the customer has, the more
+       railroad freight cars and services it is likely to use. Traditionally, larger customers merit bigger
+       discounts, so the discount algorithm for train revenue calculates customer discounts in proportion to customer
+       capacity.
+     </p>
+     <p>
+       There will be a future effort to generate train <i>expense</i> reports as well, ultimately providing enough
+       data to produce the historic Operating Ratio (<i>OR</i>), which is the ratio of total expenses to total
+       revenue. For this release, you are only obtain train <i>revenue</i> details and totals. Once the ability
+       exists to also calculate train <i>expenses</i>, you would also be able to obtain a train-by-train <i>OR</i>,
+       but not a <i>Railroad</i> OR (unless you accumulate totals from the CSV files over a period of time). Note that
+       either type of <i>OR</i> is a lower-the-better measure, traditionally targeted to stay below 80%.
+     </p>
+      <p>
+       The Operating Ratio has long been a major measure of profitability in the railroad industry and is the
+        opposite of Operating Margin used by most other industries. The <i>OR</i> does not include debt service, which
+        can easily overwhelm the gap between expenses and revenue and often resulted in railroad bankruptcies. Total
+        train expenses would be the sum of train operating expenses, such as fuel, labor, depreciation, and
+        maintenance. It would be up to you to accumulate retrospective views of revenues and expenses, perhaps to
+        evaluate your Railroad <i>OR</i>, or to more fully understand why diesel replace steam in the transition era.
+     </p>
+     <p>
+       Note that OperationsPro&trade; will save detailed train revenue data as a temporary <i>.ser</i> file, between
+       the time a train is built and when the train is terminated. This file is not really human-readable, as it
+       represents the byte-code of a Java object. The <i>.ser</i> file will be updated after every move of the train,
+       and deleted once the train is terminated. Retaining the <i>.ser</i> file allows OperationsPro&trade; to be
+       restarted without loss of revenue data. The <i>.ser</i> file is saved in a directory called "csvRevenues",
+       located in the "operations" directory. Manually deleting a <i>.ser</i> file before a train terminates, or
+       building a new train before selecting the "Save Train Revenues" option and making the train move thereafter,
+       will result in an inaccurate account of train revenue. Once a train is terminated, the train's <i>.ser</i>
+       file is deleted, and a CSV (comma separated values) file is generated for the train's gross revenue in that
+       same directory.
+     </p>
+      <p>
+        OperationsPro™ will save a train's revenue analysis as a CSV (comma separated values) file, generated for
+        the train's gross revenue, in that same directory. This CSV file can be opened by any spreadsheet program
+        which will parse the file's comma separated values as cells in a spreadsheet table. While Excel is commonly
+        used for this purpose, the Numbers application on macOS does a credible job of rendering CSV files, and was
+        used to create images of train revenue CSV files below. The CSV revenues file uses the same codes and
+        descriptions as the CSV switch lists, plus the following:
+      </p>
+
+      <table>
+        <tr>
+          <td>Code</td>
+          <td>Description</td>
+        </tr>
+
+        <tr>
+          <td>REV</td>
+          <td>Revenue</td>
+        </tr>
+
+        <tr>
+          <td>RP</td>
+          <td>Revenue Parameter</td>
+        </tr>
+
+        <tr>
+          <td>RDR</td>
+          <td>Revenue Detail Report</td>
+        </tr>
+
+      </table>
+
+   <a name="EditRevenueParameters" id="EditRevenueParameters"></a>
+     <h4>Edit Revenue Parameters</h4>
+     <p>
+       The <i>Edit Revenue Parameters</i> button brings up the <i>Revenue Parameters</i> panel.
+     </p>
+     <p><img src="images/EditRevenueParameters.png"></p>
+     <p>
+       This panel permits modifications of all the general revenue parameters for railroad operations, including
+       switching, handling, and demurrage fees, as well as cancellation and diversion mulcts, per freight car, plus a
+       maximum discount rate (in whole percentage units) provided for railroad customers. The currency values in this
+       panel are integer values of the currency in the locale your computer is using to run JMRI. In the US, these
+       would be whole dollar amounts. In France, for instance, they would be whole euros (symbol €); in the UK, they
+       would be pounds sterling (symbol: £). It might be helpful to change these values to be typical of currency
+       values in your locale, region, and the era of your railroad, in order to produce more suitable train revenues.
+     </p>
+      <p>
+       The demurrage credit days represents the count of passing trains servicing the spur, e.g. one per day,
+       which are allowed for loading or unloading a freight car upon its arrival on the spur. Each train that
+       passes decrements the remaining wait for a car until the wait time expires. If the initial wait time, as
+       specified in by the car's schedule (see <a href="#Schedules">Schedules</a>), exceeds the credit limit, a
+       demurrage fee is applied as each servicing train passes, until the remaining wait value falls below the limit.
+     </p>
+      <p>
+        The only other parameter affecting train revenue is the route fee (see <a href= "#EditRoute">Edit Route</a>).
+        The "Fee" value is the charge to transport any freight car from each location to the next along the train's
+        route.
+     </p>
+      <p>
+        Below is the sample result from a test case for the train revenue code (using the US locale). This image was
+        rendered by the Numbers app on macOS. The CSV file name (above the table) includes the train name, plus the
+        date and time the train was built. The representation of currency is in dollars and cents, as this was
+        created with the US locale setting.
+      <p><img src="images/TrainRevenueCSVfromTestCase.png">
+      <p>
+      If the computer running JMRI were set for another locale, the currency would be expressed appropriately. For
+      instance, if running in the FR locale (using the French language in France), the train's <i>Le total Revenu</i>
+      value, for "Train SFF", would be seen as "1 775,00 €" (euros):
+    </p>
+      <p><img src="images/TrainRevenueCSVfromTestCaseFR.png">
+
+   <a name="EnableValueFields" id="EnableValueFields"></a>
+   <h4>Enable Value Fields</h4>
+   You can use the value field to enter the value or cost of your rolling stock. You can rename the
+   value field if you wish and use it for other purposes.
+
+   <a name="EnableIdentificationTagFields" id="EnableIdentificationTagFields"></a>
+   <h4>Enable Identification Tag Fields</h4>
       You can enable the assignment of reporters and tags for your locations and rolling stock.
       Reporters can be assigned to locations and tracks. When this option is enabled, the Cars and
       Locomotives windows will display the last location and time the rolling stock was detected.
@@ -2154,7 +2291,7 @@
       A new window should appear. To edit an existing location, press the "Edit" button for the
       location.</p>
 
-      <p><img src="images/EditLocation.png" alt="">
+      <p><img src="images/EditRoute.png" alt="">
       </p>
 
       <p>In the "Add Location" window, enter the name of the location in the field labeled "Name".
@@ -4048,6 +4185,16 @@
       for that segment when using the train <a href="#TrainRequires">Auto</a> locomotive assignment
       feature. Enter the maximum grade that the train will encounter between the two locations.</p>
 
+      <p>
+        The Fee value is only used if you want to generate train revenue reports (see <a href="#BuildOptions">Build
+        Options</a>). This value is used to charge a customer for hauling a freight car between each location
+        and the next along the route for this train. Each move of the train adds that respective transport
+        fee to the train revenue for each car in the train for that segment of the route, charged to the customer
+        shipping or receiving the rail car. It would be appropriate to charge more for longer hauls or against higher
+        grades. The default values can be edited and will be saved by pressing the "Save Route" button on the Edit Route
+        panel.
+      </p>
+
       <p>The X and Y are the coordinates on your dispatcher's panel for the optional <a href=
       "#PanelOptionsTrainIcons">train icon.</a> You can set the coordinates directly in the table
       by double clicking on the X or Y cells, or use the <a href="#SetTrainIconCoordinates">Set
@@ -4798,6 +4945,13 @@
       appear. Pressing the set car "Save" button will ask you if you really want to remove the car
       from the train.</p>
 
+      <p>
+        If you have selected the <i>Save Train Revenues</i> checkbox, any of the above actions to add or remove a
+        freight car, or modify the pick-up or set-out locations of a freight car, will incur a <i>Mulct</i> charge to
+        the customer, specified via the "Edit Revenue Parameters" button in the <a href="#SettingsOptions"> Option
+      </a> window.
+      </p>
+
       <h3 id="TrainsTools">Trains Tools</h3>
       <img src="images/TrainsPaneMenu.png" alt="Operations Trains window Tools Menu">
       <p>In the upper left side of the "Trains" window is the "Tools" menu. The first three items;
@@ -5095,6 +5249,45 @@
       <h4 id="TrainScripts">Train Scripts</h4>
       You can run a script when starting and / or shutting down OperationsPro. Use the "Add Script"
       buttons to select the scripts you want to run.
+      <a name="TrainRevenueParameters" id="TrainRevenueParameters"></a>
+      <h4>Train Revenue Parameters</h4>
+      <p>
+        Train revenue parameter values represent the tariffs (fees) and mulcts (penalties) which can be charged to
+        railroad customers for freight services, as well as the maximum discount for services granted to each
+        customer. The discount it in proportion to their spur-track capacity. Railroad customers are named according to
+        the names of the spurs, at which cars are loaded or unloaded, and which are used for freight car set-outs and
+        pick-ups.
+      <dl>
+        <dt>Switching</dt>
+        <dd>This charge is in accordance to the freight car load, either empty or by the specific type of load being
+          handled.</dd>
+        <dt>Hazard Fee</dt>
+        <dd>A car marked as Hazardous will be charged an additional hazard fee if loaded.</dd>
+        <dt>Mulct</dt>
+        <dd>This is the penalty charged for either cancelling the scheduled pick-up or set-out of a freight car, or
+          diverting a freight car from its original destination, once the train has embarked on its route. Mulct can be
+          triggered via the Train Conductor window (available by the "Train Conductor" menu item in the Edit Train
+          window, or the "Conductor" Action button in the Trains window table) as follows: at each location along the
+          route, the conductor can add or remove cars from the train, or change their destinations using the Modify
+          button, before pressing the "Move" button.</dd>
+        <dt>Demurrage</dt>
+        <dd>This is the fee charged for delayed loading or unloading a freight car. A distinction is made between
+          railroad-owned and customer-owned rail cars, the latter designated by a final "X" in the freight car road
+          name. Demurrage is charged each time a train, which could otherwise service the car, passes by the car because
+          it is held (waiting, i.e. demurring) on a spur longer than the credit limit granted by the railroad.</dd>
+      </dl>
+      </p>
+      <p>
+        There is also al charge for transport, i.e. hauling freight cars between locations along the route of the
+        train. These charges can be found and edited by pressing the "Edit" button for a location in the <a
+              href="#Routes">Routes</a> window. The value in the column labeled <i>Fee</i> is the charge to haul a car
+        from one location to the next along the route. Each move of the train adds that respective
+        transport fee to the train revenue for each car in the train for that segment of the route, charged to the
+        customer shipping or receiving the rail car. It would be appropriate to charge more for longer hauls or
+        against higher grades. The default values can be edited and will be saved by pressing the "Save Route" button
+        on the Edit Route panel.
+      </p>
+
       <h4 id="PrintSavedTrainManifests">Print or Preview Saved Train Manifests</h4>
 
       <p>If you've selected the <a href="#Options">Save Train Manifests</a> option, you can print

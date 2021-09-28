@@ -300,11 +300,9 @@ public class TrainManagerXml extends OperationsXml implements InstanceManagerAut
     }
 
     public String getDefaultTrainCsvRevenueFileName(Train train) {
-        String date = TrainCsvCommon.getDate(true)
-                .replace('/', '_')
-                .replace(':', '_')
-                .replace(' ', '_');
-
+        String date = new SimpleDateFormat("yyyyMMdd-HHmmss")
+                .format(System.currentTimeMillis())
+                .replace('-', '_');
         return getDefaultTrainCsvRevenueDirectory()
                 + REVENUE_FILE_NAME
                 + train.getName() + ")_("
@@ -316,7 +314,7 @@ public class TrainManagerXml extends OperationsXml implements InstanceManagerAut
         FileUtil.createDirectory(getDefaultTrainCsvRevenueDirectory());
     }
 
-    private String getDefaultTrainCsvRevenueDirectory() {
+    public String getDefaultTrainCsvRevenueDirectory() {
         return OperationsXml.getFileLocation()
                 + OperationsXml.getOperationsDirectoryName()
                 + File.separator

@@ -1,7 +1,18 @@
 package jmri.jmrit.operations.routes;
 
-import java.awt.BorderLayout;
-import java.awt.FlowLayout;
+import jmri.jmrit.operations.setup.Control;
+import jmri.jmrit.operations.setup.Setup;
+import jmri.util.swing.SplitButtonColorChooserPanel;
+import jmri.util.swing.XTableColumnModel;
+import jmri.util.table.ButtonEditor;
+import jmri.util.table.ButtonRenderer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.swing.*;
+import javax.swing.colorchooser.AbstractColorChooserPanel;
+import javax.swing.table.TableCellEditor;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
@@ -9,20 +20,6 @@ import java.beans.PropertyChangeListener;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
-
-import javax.swing.*;
-import javax.swing.colorchooser.AbstractColorChooserPanel;
-import javax.swing.table.TableCellEditor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import jmri.jmrit.operations.setup.Control;
-import jmri.jmrit.operations.setup.Setup;
-import jmri.util.swing.SplitButtonColorChooserPanel;
-import jmri.util.swing.XTableColumnModel;
-import jmri.util.table.ButtonEditor;
-import jmri.util.table.ButtonRenderer;
 
 /**
  * Table Model for edit of route locations used by operations

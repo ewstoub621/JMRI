@@ -14,7 +14,6 @@ import java.util.Locale;
 import javax.annotation.Nonnull;
 import javax.swing.JOptionPane;
 
-import jmri.jmrit.operations.setup.TrainRevenues;
 import org.jdom2.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +39,7 @@ import jmri.jmrit.operations.routes.RouteLocation;
 import jmri.jmrit.operations.routes.RouteManager;
 import jmri.jmrit.operations.setup.Control;
 import jmri.jmrit.operations.setup.Setup;
+import jmri.jmrit.operations.setup.TrainRevenues;
 import jmri.jmrit.operations.trains.excel.TrainCustomManifest;
 import jmri.jmrit.roster.RosterEntry;
 import jmri.script.JmriScriptEngineManager;
@@ -3121,7 +3121,7 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         RouteLocation rl = getCurrentRouteLocation();
         RouteLocation rlNext = getNextRouteLocation(rl);
         if (Setup.isSaveTrainRevenuesEnabled()) {
-            getTrainRevenues().updateCarRevenues(rl);
+            getTrainRevenues().updateCarRevenues(rl, rlNext);
         }
 
         setCurrentLocation(rlNext);
@@ -3133,7 +3133,11 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         // tell GUI that train has complete its move
         setDirtyAndFirePropertyChange(TRAIN_MOVE_COMPLETE_CHANGED_PROPERTY, rl, rlNext);
         if (!this.isBuilt() && Setup.isSaveTrainRevenuesEnabled()) {
-            getTrainRevenues().getCsvRevenueFile(this);
+            try {
+                getTrainRevenues().getCsvRevenueFile(this);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 

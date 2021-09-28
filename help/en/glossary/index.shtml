@@ -585,6 +585,29 @@
 
           <tr>
             <td class="app">Ops</td>
+            <td class="en">Customer</td>
+            <td class="descr">For purposes of generating train revenue statements, the set of spur tracks with the same
+              name, or name prefix, is used for the railroad customer name. This is because only spurs are used for
+              loading or unloading freight cars and are the focus of billable switching, transport, fees, and
+              discounts. By naming spurs carefully, you can group revenue sources together, even if the spurs belong
+              to different locations. For instance, if you want to have a customer named "Boston Gears", you would name
+              its spur "Boston Gears". If there are more than one such spur, name them uniquely with "Boston
+              Gears-1", "Boston Gears-2", etc.
+            </td>
+            <td class="de">Kunde
+            </td>
+            <td class="it">Cliente
+            </td>
+            <td class="fr">Client
+            </td>
+            <td class="en_UK">Customer
+            </td>
+            <td class="da">Kunde
+            </td>
+          </tr>
+
+          <tr>
+            <td class="app">Ops</td>
             <td class="en">Departure Track</td>
             <td class="descr">
             </td>
@@ -795,6 +818,18 @@
             </td>
             <td class="da">
             </td>
+          </tr>
+
+          <tr>
+            <td class="app">Ops</td>
+            <td class="en">Revenue</td>
+            <td class="descr">Income from freight charges assessed.</td>
+            <td class="de">Einnahmen</td>
+            <td class="it">Reddito</td>
+            <td class="fr">Revenu</td>
+            <td class="en_UK">
+            </td>
+            <td class="da">Omsætning</td>
           </tr>
 
           <tr id="opsroute">

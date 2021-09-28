@@ -7,8 +7,6 @@ import java.util.*;
 
 import javax.swing.JComboBox;
 
-import jmri.jmrit.operations.rollingstock.RollingStockManager;
-import jmri.jmrit.operations.rollingstock.cars.*;
 import org.jdom2.Attribute;
 import org.jdom2.Element;
 import org.slf4j.Logger;
@@ -24,7 +22,6 @@ import jmri.jmrit.operations.locations.divisions.DivisionManager;
 import jmri.jmrit.operations.rollingstock.RollingStock;
 import jmri.jmrit.operations.rollingstock.cars.Car;
 import jmri.jmrit.operations.rollingstock.cars.CarLoad;
-import jmri.jmrit.operations.rollingstock.cars.CarManager;
 import jmri.jmrit.operations.rollingstock.cars.CarRoads;
 import jmri.jmrit.operations.rollingstock.cars.CarTypes;
 import jmri.jmrit.operations.rollingstock.engines.Engine;
@@ -241,24 +238,6 @@ public class Location extends PropertyChangeSupport implements Identifiable, Pro
      */
     public int getUsedLength() {
         return _usedLength;
-    }
-
-    /**
-     * Uses an unsorted list of the tracks at this location.
-     *
-     * @return cars on tracks at this location.
-     */
-    public List<Car> getCarsOnTracks() {
-        List<Car> cars = new ArrayList<>();
-
-        List<Track> tracksList = getTracksList();
-        for (Car car : InstanceManager.getDefault(CarManager.class).getList()) {
-            if (tracksList.contains(car.getTrack())) {
-                cars.add(car);
-            }
-        }
-
-        return cars;
     }
 
     /**

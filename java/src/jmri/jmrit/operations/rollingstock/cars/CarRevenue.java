@@ -16,9 +16,8 @@ public class CarRevenue implements Serializable, Comparable<CarRevenue> {
 
     private final String carKey;
     private String customerName;
-
+    private String loadName;
     private Boolean pickup;
-
     private BigDecimal cancellationMulct = BigDecimal.ZERO;
     private BigDecimal demurrageCharges = BigDecimal.ZERO;
     private BigDecimal diversionMulct = BigDecimal.ZERO;
@@ -32,6 +31,14 @@ public class CarRevenue implements Serializable, Comparable<CarRevenue> {
         }
         this.carKey = carKey;
         this.customerName = customerName;
+    }
+
+    public String getLoadName() {
+        return loadName;
+    }
+
+    public void setLoadName(String loadName) {
+        this.loadName = loadName;
     }
 
     public void addTransportCharges(BigDecimal transportCharges) {

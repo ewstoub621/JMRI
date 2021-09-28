@@ -8,8 +8,6 @@ import jmri.jmrit.operations.setup.Setup;
 import jmri.jmrit.operations.setup.TrainRevenues;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.math.BigDecimal;
@@ -26,107 +24,106 @@ import static jmri.jmrit.operations.trains.Train.NONE;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainCsvRevenue extends TrainCsvCommon {
-    public static final String RDR = "RDR";
+    private static final int SWITCHING = 0;
+    private static final int TRANSPORT = 1;
+    private static final int HAZARDFEE = 2;
+    private static final int DISCOUNTS = 3;
+    private static final int DEMURRAGE = 4;
+    private static final int CANCELLED = 5;
+    private static final int DIVERSION = 6;
+    private static final int TOTAL_COL = 7;
 
-    public static final int SWITCHING = 0;
-    public static final int TRANSPORT = 1;
-    public static final int HAZARDFEE = 2;
-    public static final int DISCOUNTS = 3;
-    public static final int DEMURRAGE = 4;
-    public static final int CANCELLED = 5;
-    public static final int DIVERSION = 6;
+    private static final String RP = "RP";
+    private static final Object REV = "REV";
+    private static final Object RDR = "RDR";
+
     private final Map<String, Car> allCarsByCarKey = new HashMap<>();
     private Train train;
     private Map<String, BigDecimal> customerDiscountRateMap;
     private Map<String, Set<CarRevenue>> carRevenuesByCustomer;
-    private boolean[] use;
     private BigDecimal[] revenueValues;
     private TrainRevenues trainRevenues;
+    private String noAction;
 
-    public TrainCsvRevenue(Train train) {
+    public TrainCsvRevenue(Train train) throws IOException {
         if (!Setup.isSaveTrainRevenuesEnabled() || train == null) {
             return;
         }
         setup(train);
-
-        // create comma separated value revenue file
-        File file = InstanceManager.getDefault(TrainManagerXml.class).createTrainCsvRevenueFile(train);
-        try (CSVPrinter fileOut = new CSVPrinter(new BufferedWriter(new OutputStreamWriter(
-                new FileOutputStream(file), StandardCharsets.UTF_8)), CSVFormat.DEFAULT)) {
-            printHeaderBlock(fileOut);
-            printParameterBlock(fileOut);
-
-            printRevenueDetailHeader(fileOut, "ByCar", "ForCustomer");
-            printRevenueDetailByCarValues(fileOut);
-
-            printRevenueDetailHeader(fileOut, "ByCustomer", "DiscountRate");
-            printRevenueDetailByCustomerValues(fileOut);
-
-            printRevenueDetailHeader(fileOut, "ByTrain", "RouteRate");
-            printRevenueDetailForTrainValues(fileOut);
-
-            fileOut.flush();
-        } catch (IOException e) {
-            log.error("Can not open CSV revenue file: {}", file.getName());
-        }
+        writeCsvRevenueFile(train);
         trainRevenues.deleteTrainRevenuesSerFile(train);
     }
 
-    private void setup(Train train) {
-        this.train = train;
-        trainRevenues = train.getTrainRevenues();
-        carRevenuesByCustomer = trainRevenues.getCarRevenuesByCustomer();
-        customerDiscountRateMap = getCustomerDiscountRateMap();
-        for (Car car : new HashSet<>(InstanceManager.getDefault(CarManager.class).getList())) {
-            allCarsByCarKey.put(car.toString(), car);
+    private void addBigDecimalValues(BigDecimal[] customerValues, BigDecimal[] carValues) {
+        for (int i = SWITCHING; i <= TOTAL_COL; i++) {
+            customerValues[i] = customerValues[i].add(carValues[i]);
         }
-        use = new boolean[7];
-        for (CarRevenue carRevenue : trainRevenues.getCarRevenues()) {
-            BigDecimal customerDiscountRate = customerDiscountRateMap.get(carRevenue.getCustomerName());
+    }
 
-            if (isPositive(carRevenue.getSwitchingCharges())) {
-                use[SWITCHING] = true;
-            }
-            if (isPositive(carRevenue.getTransportCharges())) {
-                use[TRANSPORT] = true;
-            }
-            if (isPositive(carRevenue.getHazardFeeCharges())) {
-                use[HAZARDFEE] = true;
-            }
-            if (isPositive(carRevenue.getDemurrageCharges())) {
-                use[DEMURRAGE] = true;
-            }
-            if (isPositive(customerDiscountRate)) {
-                use[DISCOUNTS] = true;
-            }
-            if (isPositive(carRevenue.getCancellationMulct())) {
-                use[CANCELLED] = true;
-            }
-            if (isPositive(carRevenue.getDiversionMulct())) {
-                use[DIVERSION] = true;
+    private BigDecimal calcDiscount(BigDecimal[] carValues, BigDecimal discountRate) {
+        BigDecimal discount = BigDecimal.ZERO;
+        for (int i = SWITCHING; i < DISCOUNTS; i++) {
+            discount = discount.add(carValues[i]);
+        }
+
+        return discount.multiply(discountRate);
+    }
+
+    private BigDecimal calcBigDecimalTotal(BigDecimal[] bigDecimals) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (int i = SWITCHING; i < TOTAL_COL; i++) {
+            if (i == DISCOUNTS) {
+                total = total.subtract(bigDecimals[i]);
+            } else {
+                total = total.add(bigDecimals[i]);
             }
         }
-        revenueValues = loadBigDecimalZeroValues();
-        if (Locale.ENGLISH.equals(Locale.getDefault())) {
-            Locale.setDefault(Locale.US);
-            javax.swing.JComponent.setDefaultLocale(Locale.US);
+
+        return total;
+    }
+
+    private static String getCurrencyString(BigDecimal value) {
+        if (!isPositive(value)) {
+            return NONE;
+        }
+        Locale aDefault = Locale.getDefault();
+        NumberFormat numberFormat = NumberFormat.getCurrencyInstance(aDefault);
+
+        return numberFormat.format(value);
+    }
+
+    private static String getCurrencyString(String amount) {
+        return getCurrencyString(BigDecimal.valueOf(Double.parseDouble(amount)));
+    }
+
+    private static boolean isPositive(BigDecimal value) {
+        if (value == null) {
+            return false;
+        } else {
+            return value.compareTo(BigDecimal.ZERO) > 0;
         }
     }
 
     private String getActionString(CarRevenue carRevenue) {
         Boolean pickup = carRevenue.isPickup();
 
-        return Bundle.getMessage(pickup == null ? "csvNoWork" : pickup ? "Pickup" : "SetOut");
+        return pickup == null
+                ? getNoAction()
+                : Bundle.getMessage(pickup ? "Pickup" : "SetOut");
     }
 
-    private String getCarDescription(Map<String, Car> allCarsByCarKey, CarRevenue carRevenue) {
+    private String getCarDescription(CarRevenue carRevenue) {
         Car car = allCarsByCarKey.get(carRevenue.getCarKey());
-        return String.format("%-7s: %-7s %-5s - %s(%s)",
-                             getActionString(carRevenue),
-                             car.getNumber(),
-                             car.getRoadName(),
-                             car.getTypeName(),
-                             car.getLoadName()
+        if (carRevenue.getLoadName() == null) {
+            carRevenue.setLoadName(car.getLoadName());
+        }
+
+        return String.format("%-" + getNoAction().length() + "s : (%s) %-5s %-7s - %s",
+                getActionString(carRevenue),
+                carRevenue.getLoadName(),
+                car.getRoadName(),
+                car.getNumber(),
+                car.getTypeName()
         );
     }
 
@@ -162,55 +159,52 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         return customerDiscountRateMap;
     }
 
-    private Object getCurrencyString(String amount) {
-        return getCurrencyString(BigDecimal.valueOf(Double.parseDouble(amount)));
-    }
-
-    private String getCurrencyString(BigDecimal value) {
-        if (!isPositive(value)) {
-            return NONE;
-        }
-        Locale aDefault = Locale.getDefault();
-        log.debug("getCurrencyString({}): default locale {}", value, aDefault);
-        return NumberFormat.getCurrencyInstance(aDefault).format(value);
-    }
-
-    private boolean isPositive(BigDecimal value) {
-        if (value == null) {
-            return false;
-        } else {
-            return value.compareTo(BigDecimal.ZERO) > 0;
-        }
-    }
-
-    private String getPercentageString(BigDecimal value) {
-        return isPositive(value) ? NONE : getPercentFormat().format(value);
-    }
-
     private NumberFormat getPercentFormat() {
         NumberFormat percentFormat = NumberFormat.getPercentInstance();
-        percentFormat.setMaximumFractionDigits(HAZARDFEE);
-        percentFormat.setMinimumFractionDigits(HAZARDFEE);
+        percentFormat.setMaximumFractionDigits(2);
+        percentFormat.setMinimumFractionDigits(2);
 
         return percentFormat;
     }
 
-    private void printHeaderBlock(CSVPrinter fileOut) throws IOException {
-        fileOut.printRecord(
-                Bundle.getMessage("csvOperator"),
-                Bundle.getMessage("csvDescription"),
-                Bundle.getMessage("csvParameters")
-        ); // NOI18N
-        fileOut.printRecord(
-                Bundle.getMessage("Report"),
-                Setup.getMessage("RevenueReport"),
-                Locale.getDefault().toString()
-        );
+    private String getPercentageString(BigDecimal value) {
+        return isPositive(value) ? getPercentFormat().format(value) : NONE;
+    }
 
-        printRailroadName(
-                fileOut,
-                train.getRailroadName().isEmpty() ? Setup.getRailroadName() : train.getRailroadName()
-        );
+    private BigDecimal[] loadBigDecimalZeroValues() {
+        BigDecimal[] bigDecimals = new BigDecimal[TOTAL_COL + 1];
+        for (int i = SWITCHING; i <= TOTAL_COL; i++) {
+            bigDecimals[i] = BigDecimal.ZERO;
+        }
+        return bigDecimals;
+    }
+
+    private BigDecimal[] loadCarCharges(CarRevenue carRevenue, BigDecimal discountRate) {
+        BigDecimal[] carCharges = new BigDecimal[TOTAL_COL + 1];
+
+        carCharges[SWITCHING] = carRevenue.getSwitchingCharges();
+        carCharges[TRANSPORT] = carRevenue.getTransportCharges();
+        carCharges[HAZARDFEE] = carRevenue.getHazardFeeCharges();
+        carCharges[DISCOUNTS] = calcDiscount(carCharges, discountRate);
+        carCharges[DEMURRAGE] = carRevenue.getDemurrageCharges();
+        carCharges[CANCELLED] = carRevenue.getCancellationMulct();
+        carCharges[DIVERSION] = carRevenue.getDiversionMulct();
+        carCharges[TOTAL_COL] = calcBigDecimalTotal(carCharges);
+
+        return carCharges;
+    }
+
+    private void printBigDecimalValues(CSVPrinter fileOut, BigDecimal[] bigDecimals) throws IOException {
+        for (int i = SWITCHING; i <= TOTAL_COL; i++) {
+            fileOut.print(getCurrencyString(bigDecimals[i]));
+        }
+    }
+
+    private void printHeaderBlock(CSVPrinter fileOut) throws IOException {
+        fileOut.printRecord(Bundle.getMessage("csvOperator"), Bundle.getMessage("csvDescription"), Bundle.getMessage("csvParameters")); // NOI18N
+        fileOut.printRecord(REV, Setup.getMessage("RevenueReport"), Locale.getDefault().toString());
+
+        printRailroadName(fileOut, train.getRailroadName().isEmpty() ? Setup.getRailroadName() : train.getRailroadName());
         printTrainName(fileOut, train.getName());
         printTrainDescription(fileOut, train.getDescription());
         printValidity(fileOut, getDate(true));
@@ -228,48 +222,26 @@ public class TrainCsvRevenue extends TrainCsvCommon {
 
     private void printParameterBlock(CSVPrinter fileOut) throws IOException {
         fileOut.printRecord(NONE);
-        fileOut.printRecord(Setup.getMessage("RevenueParameters"));
-        fileOut.printRecord(NONE, Setup.getMessage("ParameterDescription"), Setup.getMessage("ParameterValue"));
+        fileOut.printRecord(REV, Setup.getMessage("ParameterDescription"), Setup.getMessage("ParameterValue"));
         fileOut.printRecord(NONE, Setup.getMessage("DiscountTitle"));
-        fileOut.printRecord("RP", " - " + Setup.getMessage("MaximumDiscount"), Setup.getMaxDiscount() + "%");
+        fileOut.printRecord(RP, " - " + Setup.getMessage("MaximumDiscount"), Setup.getMaxDiscount() + "%");
         fileOut.printRecord(NONE, Setup.getMessage("SwitchingTitle"));
-        fileOut.printRecord("RP", " - " + Setup.getMessage("SwitchingEmpty"),
-                            getCurrencyString(Setup.getSwitchEmpty())
-        );
-        fileOut.printRecord("RP", " - " + Setup.getMessage("SwitchingLoads"),
-                            getCurrencyString(Setup.getSwitchLoads())
-        );
-        fileOut.printRecord("RP", " - " + Setup.getMessage("SwitchingAggrs"),
-                            getCurrencyString(Setup.getSwitchAggrs())
-        );
-        fileOut.printRecord("RP", " - " + Setup.getMessage("SwitchingGrain"),
-                            getCurrencyString(Setup.getSwitchGrain())
-        );
-        fileOut.printRecord("RP", " - " + Setup.getMessage("SwitchingMetal"),
-                            getCurrencyString(Setup.getSwitchMetal())
-        );
-        fileOut.printRecord("RP", " - " + Setup.getMessage("SwitchingWoody"),
-                            getCurrencyString(Setup.getSwitchWoody())
-        );
-        fileOut.printRecord("RP", " - " + Setup.getMessage("SwitchingTanks"),
-                            getCurrencyString(Setup.getSwitchTanks())
-        );
+        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingEmpty"), getCurrencyString(Setup.getSwitchEmpty()));
+        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingLoads"), getCurrencyString(Setup.getSwitchLoads()));
+        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingAggrs"), getCurrencyString(Setup.getSwitchAggrs()));
+        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingGrain"), getCurrencyString(Setup.getSwitchGrain()));
+        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingMetal"), getCurrencyString(Setup.getSwitchMetal()));
+        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingWoody"), getCurrencyString(Setup.getSwitchWoody()));
+        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingTanks"), getCurrencyString(Setup.getSwitchTanks()));
         fileOut.printRecord(NONE, Setup.getMessage("MulctTitle"));
-        fileOut.printRecord("RP", " - " + Setup.getMessage("CancelledMulct"),
-                            getCurrencyString(Setup.getCancelMulct())
-        );
-        fileOut.printRecord("RP", " - " + Setup.getMessage("DiversionMulct"),
-                            getCurrencyString(Setup.getDivertMulct())
-        );
+        fileOut.printRecord(RP, " - " + Setup.getMessage("CancelledMulct"), getCurrencyString(Setup.getCancelMulct()));
+        fileOut.printRecord(RP, " - " + Setup.getMessage("DiversionMulct"), getCurrencyString(Setup.getDivertMulct()));
         fileOut.printRecord(NONE, Setup.getMessage("DemurrageTitle"));
-        fileOut.printRecord("RP", " - " + Setup.getMessage("DemurrageRR"),
-                            getCurrencyString(Setup.getDemurrageRR()));
-        fileOut.printRecord("RP", " - " + Setup.getMessage("DemurrageXX"),
-                            getCurrencyString(Setup.getDemurrageXX()));
-        fileOut.printRecord("RP", " - " + Setup.getMessage("DemurrageCredits"), Setup.getDemurCredits());
+        fileOut.printRecord(RP, " - " + Setup.getMessage("DemurrageRR"), getCurrencyString(Setup.getDemurrageRR()));
+        fileOut.printRecord(RP, " - " + Setup.getMessage("DemurrageXX"), getCurrencyString(Setup.getDemurrageXX()));
+        fileOut.printRecord(RP, " - " + Setup.getMessage("DemurrageCredits"), Setup.getDemurCredits());
         fileOut.printRecord(NONE, Setup.getMessage("HandlingTitle"));
-        fileOut.printRecord("RP", " - " + Setup.getMessage("AddedHazardFee"),
-                            getCurrencyString(Setup.getHazardFee()));
+        fileOut.printRecord(RP, " - " + Setup.getMessage("AddedHazardFee"), getCurrencyString(Setup.getHazardFee()));
     }
 
     private void printRevenueDetailByCarValues(CSVPrinter fileOut) throws IOException {
@@ -280,13 +252,17 @@ public class TrainCsvRevenue extends TrainCsvCommon {
                 discountRate = BigDecimal.ZERO;
             }
 
-            Set<CarRevenue> carRevenues = e.getValue();
-            for (CarRevenue carRevenue : carRevenues) {
+            Map<String, CarRevenue> printMap = new TreeMap<>();
+            for (CarRevenue carRevenue : e.getValue()) {
+                printMap.put(getCarDescription(carRevenue), carRevenue);
+            }
+            for (Map.Entry<String, CarRevenue> kv : printMap.entrySet()) {
+                String description = kv.getKey();
+                CarRevenue carRevenue = kv.getValue();
                 fileOut.print(RDR);
-                fileOut.print(getCarDescription(allCarsByCarKey, carRevenue));
+                fileOut.print(description);
                 fileOut.print(customer);
                 printBigDecimalValues(fileOut, loadCarCharges(carRevenue, discountRate));
-                fileOut.print(getCurrencyString(calcBigDecimalTotal(loadCarCharges(carRevenue, discountRate))));
                 fileOut.println();
             }
         }
@@ -309,7 +285,6 @@ public class TrainCsvRevenue extends TrainCsvCommon {
             fileOut.print(customerName);
             fileOut.print(getPercentageString(customerDiscountRate));
             printBigDecimalValues(fileOut, customerCharges);
-            fileOut.print(getCurrencyString(calcBigDecimalTotal(customerCharges)));
             fileOut.println();
 
             addBigDecimalValues(revenueValues, customerCharges);
@@ -318,110 +293,88 @@ public class TrainCsvRevenue extends TrainCsvCommon {
 
     private void printRevenueDetailForTrainValues(CSVPrinter fileOut) throws IOException {
         fileOut.print(RDR);
-        fileOut.print(train.getName() + " - " + train.getDescription());
+        fileOut.print(train.getDescription());
         fileOut.print(getCurrencyString(trainRevenues.getMaxRouteTransportFee()));
         printBigDecimalValues(fileOut, revenueValues);
-        fileOut.print(getCurrencyString(calcBigDecimalTotal(revenueValues)));
         fileOut.println();
     }
 
-    private void printBigDecimalValues(CSVPrinter fileOut, BigDecimal[] bigDecimals) throws IOException {
-        for (int i = 0; i < use.length; i++) {
-            if (use[i]) {
-                fileOut.print(getCurrencyString(bigDecimals[i]));
-            }
-        }
-    }
-
-    private BigDecimal[] loadCarCharges(CarRevenue carRevenue, BigDecimal discountRate) {
-        BigDecimal[] carCharges = new BigDecimal[use.length];
-        for (int i = 0; i < use.length; i++) {
-            switch (i) {
-            case SWITCHING:
-                carCharges[i] = carRevenue.getSwitchingCharges();
-                break;
-            case TRANSPORT:
-                carCharges[i] = carRevenue.getTransportCharges();
-                break;
-            case HAZARDFEE:
-                carCharges[i] = carRevenue.getHazardFeeCharges();
-                break;
-            case DEMURRAGE:
-                carCharges[i] = carRevenue.getDemurrageCharges();
-                break;
-            case DISCOUNTS:
-                carCharges[i] = calcDiscount(carCharges, discountRate);
-                break;
-            case CANCELLED:
-                carCharges[i] = carRevenue.getCancellationMulct();
-                break;
-            case DIVERSION:
-                carCharges[i] = carRevenue.getDiversionMulct();
-                break;
-            }
-        }
-        return carCharges;
-    }
-
-    private BigDecimal[] loadBigDecimalZeroValues() {
-        BigDecimal[] bigDecimals = new BigDecimal[use.length];
-        for (int i = 0; i < use.length; i++) {
-            bigDecimals[i] = BigDecimal.ZERO;
-        }
-        return bigDecimals;
-    }
-
-    private void addBigDecimalValues(BigDecimal[] customerValues, BigDecimal[] carValues) {
-        for (int i = 0; i < use.length; i++) {
-            customerValues[i] = customerValues[i].add(carValues[i]);
-        }
-    }
-
-    private BigDecimal calcDiscount(BigDecimal[] carValues, BigDecimal discountRate) {
-        BigDecimal discount = BigDecimal.ZERO;
-        for (int i = SWITCHING; i < DISCOUNTS; i++) {
-            discount = discount.add(carValues[i]);
-        }
-        return discountRate.multiply(discount);
-    }
-
-    private BigDecimal calcBigDecimalTotal(BigDecimal[] bigDecimals) {
-        BigDecimal total = BigDecimal.ZERO;
-        for (int i = 0; i < use.length; i++) {
-            total = total.add(bigDecimals[i]);
-        }
-        return total;
-    }
-
-    private void printRevenueDetailHeader(CSVPrinter fileOut, String col2, String col3) throws IOException {
-        fileOut.printRecord(NONE);
-        fileOut.print(Setup.getMessage("Revenue"));
+    private void printRevenueDetailHeader(CSVPrinter fileOut, String col2, String[] col3) throws IOException {
+        fileOut.println();
+        fileOut.print(REV);
         fileOut.print(Setup.getMessage(col2));
-        fileOut.print(Setup.getMessage(col3));
-        if (use[SWITCHING]) {
-            fileOut.print(Setup.getMessage("Switching"));
-        }
-        if (use[TRANSPORT]) {
-            fileOut.print(Setup.getMessage("Transport"));
-        }
-        if (use[HAZARDFEE]) {
-            fileOut.print(Setup.getMessage("HazardFee"));
-        }
-        if (use[DEMURRAGE]) {
-            fileOut.print(Setup.getMessage("Demurrage"));
-        }
-        if (use[DISCOUNTS]) {
-            fileOut.print(Setup.getMessage("Discount"));
-        }
-        if (use[CANCELLED]) {
-            fileOut.print(Setup.getMessage("Cancelled"));
-        }
-        if (use[DIVERSION]) {
-            fileOut.print(Setup.getMessage("Diverted"));
-        }
+        fileOut.print(Setup.getMessage(col3[0]));
+        fileOut.print(Setup.getMessage("Switching"));
+        fileOut.print(Setup.getMessage("Transport"));
+        fileOut.print(Setup.getMessage("Hazard"));
+        fileOut.print(Setup.getMessage("Customer"));
+        fileOut.print(Setup.getMessage("Demurrage"));
+        fileOut.print(Setup.getMessage("Cancelled"));
+        fileOut.print(Setup.getMessage("Diverted"));
         fileOut.print(Setup.getMessage("Total"));
         fileOut.println();
+        fileOut.print(NONE);
+        fileOut.print(NONE);
+        fileOut.print(Setup.getMessage(col3[1]));
+        fileOut.print(Setup.getMessage("Tariff"));
+        fileOut.print(Setup.getMessage("Tariff"));
+        fileOut.print(Setup.getMessage("Fee"));
+        fileOut.print(Setup.getMessage("Discount"));
+        fileOut.print(Setup.getMessage("Fee"));
+        fileOut.print(Setup.getMessage("Mulct"));
+        fileOut.print(Setup.getMessage("Mulct"));
+        fileOut.print(Setup.getMessage("Revenue"));
+        fileOut.print(NONE);
+        fileOut.print(NONE);
+        fileOut.print(NONE);
+        fileOut.println();
     }
 
-    private final static Logger log = LoggerFactory.getLogger(TrainCsvRevenue.class);
+    private String getNoAction() {
+        if (noAction == null) {
+            int pickUpLen = Bundle.getMessage("Pickup").length();
+            int setOutLen = Bundle.getMessage("SetOut").length();
+            int max = Math.max(setOutLen, pickUpLen);
+
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < max; i++) {
+                sb.append('-');
+            }
+            noAction = sb.toString();
+        }
+        return noAction;
+    }
+
+    private void setup(Train train) {
+        this.train = train;
+        trainRevenues = train.getTrainRevenues();
+        carRevenuesByCustomer = trainRevenues.getCarRevenuesByCustomer();
+        customerDiscountRateMap = getCustomerDiscountRateMap();
+        for (Car car : new HashSet<>(InstanceManager.getDefault(CarManager.class).getList())) {
+            allCarsByCarKey.put(car.toString(), car);
+        }
+        revenueValues = loadBigDecimalZeroValues();
+        if (Locale.ENGLISH.equals(Locale.getDefault())) {
+            Locale.setDefault(Locale.US);
+            javax.swing.JComponent.setDefaultLocale(Locale.US);
+        }
+    }
+    private void writeCsvRevenueFile(Train train) throws IOException {
+        File csvFile = InstanceManager.getDefault(TrainManagerXml.class).createTrainCsvRevenueFile(train);
+        CSVPrinter fileOut = new CSVPrinter(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(csvFile), StandardCharsets.UTF_8)), CSVFormat.DEFAULT);
+        printHeaderBlock(fileOut);
+        printParameterBlock(fileOut);
+
+        printRevenueDetailHeader(fileOut, "ByCar", new String[]{"For", "Customer"});
+        printRevenueDetailByCarValues(fileOut);
+
+        printRevenueDetailHeader(fileOut, "ByCustomer", new String[]{"Discount", "Rate"});
+        printRevenueDetailByCustomerValues(fileOut);
+
+        printRevenueDetailHeader(fileOut, "ByTrain", new String[]{"Route", "Rate"});
+        printRevenueDetailForTrainValues(fileOut);
+
+        fileOut.flush();
+    }
+
 }
