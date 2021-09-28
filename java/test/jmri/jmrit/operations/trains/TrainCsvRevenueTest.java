@@ -2,7 +2,6 @@ package jmri.jmrit.operations.trains;
 
 import jmri.InstanceManager;
 import jmri.jmrit.operations.OperationsTestCase;
-import jmri.jmrit.operations.locations.Location;
 import jmri.jmrit.operations.locations.LocationManager;
 import jmri.jmrit.operations.locations.Track;
 import jmri.jmrit.operations.rollingstock.cars.Car;
@@ -30,8 +29,17 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainCsvRevenueTest extends OperationsTestCase {
+    private static final String LOCATION_ID_HEAD = "1";
     private static final String LOCATION_ID_SPUR = "20";
+    private static final String LOCATION_ID_TERM = "3";
+
+    private static final String TRACK_ID_HEAD = "1s1";
     private static final String TRACK_ID_SPUR = "20s1";
+    private static final String TRACK_ID_TERM1 = "3s1";
+    private static final String TRACK_ID_TERM2 = "3s2";
+
+    private static final List<String> CAR_SET_A = Arrays.asList("CP777", "CPX10001", "CPX10002", "CP888");
+    private static final List<String> CAR_SET_B = Arrays.asList("CP99", "CP888", "CPX10001", "CP777");
 
     private CarManager carManager;
     private CarTypes carTypes;
@@ -42,7 +50,6 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
 
     private Locale defaultLocale;
     private List<Track> tracks;
-    private String noAction;
 
     @Override
     @BeforeEach
@@ -56,7 +63,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         trainManager = InstanceManager.getDefault(TrainManager.class);
         trainManagerXml = InstanceManager.getDefault(TrainManagerXml.class);
 
-        File csvRevenueDirectory = new File( trainManagerXml. getDefaultTrainCsvRevenueDirectory());
+        File csvRevenueDirectory = new File(trainManagerXml.getDefaultTrainCsvRevenueDirectory());
         if (csvRevenueDirectory.exists()) {
             assertTrue(csvRevenueDirectory.delete());
         }
@@ -107,44 +114,44 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     }
 
     @Test
-    public void testCreateCsvRevenueTrain2WithAllCharges() throws IOException {
+    public void testCreateCsvRevenueTrain2WithAllChargesCarSetA() throws IOException {
         int trainNumber = 2;
 
         Train train = setUpTrain(String.valueOf(trainNumber));
         updateRailroadName(train, ": test train #" + trainNumber + ", with all charges");
 
-        addDemurrage("CP777");
+        addDemurrage(CAR_SET_A.get(0));
 
         assertTrue(train.build());
 
         addSwitching();
-        addHazardous("CPX10001");
-        addCancelMulct("CPX10002");
-        addDivertMulct("CP888");
+        addHazardous(CAR_SET_A.get(1));
+        addCancelMulct(CAR_SET_A.get(2));
+        addDivertMulct(CAR_SET_A.get(3));
 
         train.terminate();
         assertFalse(train.isBuilt());
 
         TreeMap<Integer, List<String>> cellMap = getCsvRevenueAsTreeMap(train);
 
-        verifyTrain2CsvRevenueUS_2(cellMap);
+        verifyTrain2CsvRevenueUSCarSetA(cellMap);
     }
 
     @Test
-    public void testCreateCsvRevenueTrain2WithAllRestarts() throws IOException {
+    public void testCreateCsvRevenueTrain2WithAllRestartsCarSetB() throws IOException {
         int trainNumber = 2;
 
         Train train = setUpTrain(String.valueOf(trainNumber));
         updateRailroadName(train, ": test train #" + trainNumber + ", with all restarts");
 
-        addDemurrage("CP99");
+        addDemurrage(CAR_SET_B.get(0));
 
         assertTrue(train.build());
 
         addSwitching();
-        addHazardous("CP888");
-        addCancelMulct("CPX10001");
-        addDivertMulct("CP777");
+        addHazardous(CAR_SET_B.get(1));
+        addCancelMulct(CAR_SET_B.get(2));
+        addDivertMulct(CAR_SET_B.get(3));
 
         verifyRestartMoveRestoreCycle(train);
         verifyRestartMoveRestoreCycle(train);
@@ -154,35 +161,37 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
 
         TreeMap<Integer, List<String>> cellMap = getCsvRevenueAsTreeMap(train);
 
-        verifyTrain2CsvRevenueUS_3(cellMap);
+        verifyTrain2CsvRevenueUSCarSetB(cellMap);
     }
 
     @Test
-    public void testCreateCsvRevenueTrain2WithLocaleFrance() throws IOException {
+    public void testCreateCsvRevenueTrain2WithLocaleFranceCarSetB() throws IOException {
         Locale.setDefault(Locale.FRANCE);
 
-        int trainNumber = 2;
+        try {
+            int trainNumber = 2;
 
-        Train train = setUpTrain(String.valueOf(trainNumber));
-        updateRailroadName(train, ": test train #" + trainNumber + ", with Locale.FRANCE");
+            Train train = setUpTrain(String.valueOf(trainNumber));
+            updateRailroadName(train, ": test train #" + trainNumber + ", with Locale.FRANCE");
 
-        addDemurrage("CP99");
+            addDemurrage(CAR_SET_B.get(0));
 
-        assertTrue(train.build());
+            assertTrue(train.build());
 
-        addSwitching();
-        addHazardous("CP888");
-        addCancelMulct("CPX10001");
-        addDivertMulct("CP777");
+            addSwitching();
+            addHazardous(CAR_SET_B.get(1));
+            addCancelMulct(CAR_SET_B.get(2));
+            addDivertMulct(CAR_SET_B.get(3));
 
-        train.terminate();
-        assertFalse(train.isBuilt());
+            train.terminate();
+            assertFalse(train.isBuilt());
 
-        TreeMap<Integer, List<String>> cellMap = getCsvRevenueAsTreeMap(train);
+            TreeMap<Integer, List<String>> cellMap = getCsvRevenueAsTreeMap(train);
 
-        verifyTrain2CsvRevenueFR(cellMap);
-
-        Locale.setDefault(Locale.US);
+            verifyTrain2CsvRevenueFRCarSetB(cellMap);
+        } finally {
+            Locale.setDefault(Locale.US);
+        }
     }
 
     private void addCancelMulct(String carId) {
@@ -263,8 +272,8 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         updateCar(train, "CPX", "20001", "Coilcar", "L", 0, 1);
 
         updateCar(train, "CP", "777", "FlatWood", "L", 1, 2);
-        updateCar(train, "CP","888", "HopGrain", "L", 1, 2);
-        updateCar(train, "CP","99", "HopCoal", "L", 1, 2);
+        updateCar(train, "CP", "888", "HopGrain", "L", 1, 2);
+        updateCar(train, "CP", "99", "HopCoal", "L", 1, 2);
         updateCar(train, "CPX", "20002", "Tank Oil", "E", 1, 2);
 
         for (RouteLocation rl : routeManager.getRouteById("1").getLocationsBySequenceList()) {
@@ -309,20 +318,12 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     }
 
     private void updateTrackList() {
-        Location l1 = locationManager.getLocationById("1");
-        Track t1 = l1.getTrackById("1s1");
-        t1.setLength(2000);
+        tracks = new ArrayList<>();
 
-        Location l2 = locationManager.getLocationById(LOCATION_ID_SPUR);
-        Track t2 = l2.getTrackById(TRACK_ID_SPUR);
-        t2.setLength(2000);
-
-        Location l3 = locationManager.getLocationById("3");
-        Track t3 = l3.getTrackById("3s1");
-        Track t4 = l3.getTrackById("3s2");
-        t3.setLength(2000);
-
-        tracks = Arrays.asList(t1, t2, t3, t4);
+        tracks.add(locationManager.getLocationById(LOCATION_ID_HEAD).getTrackById(TRACK_ID_HEAD));
+        tracks.add(locationManager.getLocationById(LOCATION_ID_SPUR).getTrackById(TRACK_ID_SPUR));
+        tracks.add(locationManager.getLocationById(LOCATION_ID_TERM).getTrackById(TRACK_ID_TERM1));
+        tracks.add(locationManager.getLocationById(LOCATION_ID_TERM).getTrackById(TRACK_ID_TERM2));
     }
 
     private void updateTypeName(String typeName, CarTypes carTypes, List<Track> tracks, Train train, Car car) {
@@ -350,27 +351,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
 
     private void verifyTrain1CsvRevenueUS(TreeMap<Integer, List<String>> cellMap) {
 
-        List<List<String>> expected = Arrays.asList(
-                Arrays.asList("REV", "By Car", "For", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"),
-                Arrays.asList("\"\"", NONE, "Customer", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"),
-                Arrays.asList("RDR", "------- : (E) CPX   10002   - Tank Oil", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"),
-                Arrays.asList("RDR", "------- : (L) CPX   10001   - Tank Oil", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"),
-                Arrays.asList("RDR", "------- : (L) CPX   10003   - Tank Oil", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"),
-                Arrays.asList("RDR", "------- : (L) CPX   20001   - Coilcar", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"),
-                Arrays.asList("RDR", "------- : (E) CPX   20002   - Tank Oil", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"),
-                Arrays.asList("RDR", "------- : (L) CP    777     - FlatWood", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"),
-                Arrays.asList("RDR", "------- : (L) CP    888     - HopGrain", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"),
-                Arrays.asList("RDR", "------- : (L) CP    99      - HopCoal", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"),
-                Collections.singletonList(NONE),
-                Arrays.asList("REV", "By Customer", "Discount", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"),
-                Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"),
-                Arrays.asList("RDR", "NI Yard", NONE, NONE, "$80.00", NONE, NONE, NONE, NONE, NONE, "$80.00"),
-                Arrays.asList("RDR", "South End 2", NONE, NONE, "$80.00", NONE, NONE, NONE, NONE, NONE, "$80.00"),
-                Collections.singletonList(NONE),
-                Arrays.asList("REV", "By Train", "Route", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"),
-                Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"),
-                Arrays.asList("RDR", "Train STF", "$40.00", NONE, "$160.00", NONE, NONE, NONE, NONE, NONE, "$160.00")
-        );
+        List<List<String>> expected = Arrays.asList(Arrays.asList("REV", "By Car", "For", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Customer", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "------- : (E) CPX   10002   - Tank Oil", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CPX   10001   - Tank Oil", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CPX   10003   - Tank Oil", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CPX   20001   - Coilcar", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (E) CPX   20002   - Tank Oil", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CP    777     - FlatWood", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CP    888     - HopGrain", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CP    99      - HopCoal", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Collections.singletonList(NONE), Arrays.asList("REV", "By Customer", "Discount", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "NI Yard", NONE, NONE, "$80.00", NONE, NONE, NONE, NONE, NONE, "$80.00"), Arrays.asList("RDR", "South End 2", NONE, NONE, "$80.00", NONE, NONE, NONE, NONE, NONE, "$80.00"), Collections.singletonList(NONE), Arrays.asList("REV", "By Train", "Route", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "Train STF", "$40.00", NONE, "$160.00", NONE, NONE, NONE, NONE, NONE, "$160.00"));
 
         int rowIndex = 30;
         for (List<String> expectedList : expected) {
@@ -384,28 +365,9 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         }
     }
 
-    private void verifyTrain2CsvRevenueUS_1(TreeMap<Integer, List<String>> cellMap) {
+    private void verifyTrain2CsvRevenueUSCarSetA(TreeMap<Integer, List<String>> cellMap) {
 
-        List<List<String>> expected = Arrays.asList(
-                Arrays.asList("REV","By Car","For","Switching","Transport","Hazard","Customer","Demurrage","Cancelled","Diverted","Total"),
-                Arrays.asList("\"\"",NONE,"Customer","Tariff","Tariff","Fee","Discount","Fee","Mulct","Mulct","Revenue"),
-                Arrays.asList("RDR","------- : (L) CP    777     - FlatWood","NI Spur",NONE,NONE,NONE,NONE,"$100.00",NONE,NONE,"$100.00"),
-                Arrays.asList("RDR","------- : (E) CPX   10002   - Tank Oil","NI Spur",NONE,NONE,NONE,NONE,NONE,"$150.00",NONE,"$150.00"),
-                Arrays.asList("RDR","Pick up : (L)CP    888     - HopGrain","NI Spur","$250.00",NONE,NONE,"$62.50",NONE,NONE,"$250.00","$437.50"),
-                Arrays.asList("RDR","Pick up : (L)CP    99      - HopCoal","NI Spur","$250.00","$20.00",NONE,"$67.50",NONE,NONE,NONE,"$202.50"),
-                Arrays.asList("RDR","Pick up : (E)CPX   20002   - Tank Oil","NI Spur","$150.00","$20.00",NONE,"$42.50",NONE,NONE,NONE,"$127.50"),
-                Arrays.asList("RDR","Set out : (L) CPX   10001   - Tank Oil","NI Spur","$250.00","$20.00","$150.00","$105.00",NONE,NONE,NONE,"$315.00"),
-                Arrays.asList("RDR","Set out : (L) CPX   10003   - Tank Oil","NI Spur","$250.00","$20.00",NONE,"$67.50",NONE,NONE,NONE,"$202.50"),
-                Arrays.asList("RDR","Set out : (L) CPX   20001   - Coilcar","NI Spur","$300.00","$20.00",NONE,"$80.00",NONE,NONE,NONE,"$240.00"),
-                Collections.singletonList(NONE),
-                Arrays.asList("REV","By Customer","Discount","Switching","Transport","Hazard","Customer","Demurrage","Cancelled","Diverted","Total"),
-                Arrays.asList("\"\"",NONE,"Rate","Tariff","Tariff","Fee","Discount","Fee","Mulct","Mulct","Revenue"),
-                Arrays.asList("RDR","NI Spur","25.00%","\"$1,450.00\"","$100.00","$150.00","$425.00","$100.00","$150.00","$250.00","\"$1,775.00\""),
-                Collections.singletonList(NONE),
-                Arrays.asList("REV","By Train","Route","Switching","Transport","Hazard","Customer","Demurrage","Cancelled","Diverted","Total"),
-                Arrays.asList("\"\"",NONE,"Rate","Tariff","Tariff","Fee","Discount","Fee","Mulct","Mulct","Revenue"),
-                Arrays.asList("RDR","Train SFF","$40.00","\"$1,450.00\"","$100.00","$150.00","$425.00","$100.00","$150.00","$250.00","\"$1,775.00\"")
-        );
+        List<List<String>> expected = Arrays.asList(Arrays.asList("REV", "By Car", "For", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Customer", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "------- : (E) CPX   10002   - Tank Oil", "NI Spur", NONE, NONE, NONE, NONE, NONE, "$150.00", NONE, "$150.00"), Arrays.asList("RDR", "------- : (L) CP    777     - FlatWood", "NI Spur", NONE, NONE, NONE, NONE, "$100.00", NONE, NONE, "$100.00"), Arrays.asList("RDR", "Pick up : (E) CPX   20002   - Tank Oil", "NI Spur", "$150.00", "$20.00", NONE, "$42.50", NONE, NONE, NONE, "$127.50"), Arrays.asList("RDR", "Pick up : (L) CP    888     - HopGrain", "NI Spur", "$250.00", NONE, NONE, "$62.50", NONE, NONE, "$250.00", "$437.50"), Arrays.asList("RDR", "Pick up : (L) CP    99      - HopCoal", "NI Spur", "$250.00", "$20.00", NONE, "$67.50", NONE, NONE, NONE, "$202.50"), Arrays.asList("RDR", "Set out : (L) CPX   10001   - Tank Oil", "NI Spur", "$250.00", "$20.00", "$150.00", "$105.00", NONE, NONE, NONE, "$315.00"), Arrays.asList("RDR", "Set out : (L) CPX   10003   - Tank Oil", "NI Spur", "$250.00", "$20.00", NONE, "$67.50", NONE, NONE, NONE, "$202.50"), Arrays.asList("RDR", "Set out : (L) CPX   20001   - Coilcar", "NI Spur", "$300.00", "$20.00", NONE, "$80.00", NONE, NONE, NONE, "$240.00"), Collections.singletonList(NONE), Arrays.asList("REV", "By Customer", "Discount", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "NI Spur", "25.00%", "\"$1,450.00\"", "$100.00", "$150.00", "$425.00", "$100.00", "$150.00", "$250.00", "\"$1,775.00\""), Collections.singletonList(NONE), Arrays.asList("REV", "By Train", "Route", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "Train SFF", "$40.00", "\"$1,450.00\"", "$100.00", "$150.00", "$425.00", "$100.00", "$150.00", "$250.00", "\"$1,775.00\""));
 
         int rowIndex = 29;
         for (List<String> expectedList : expected) {
@@ -419,28 +381,9 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         }
     }
 
-    private void verifyTrain2CsvRevenueUS_2(TreeMap<Integer, List<String>> cellMap) {
+    private void verifyTrain2CsvRevenueUSCarSetB(TreeMap<Integer, List<String>> cellMap) {
 
-        List<List<String>> expected = Arrays.asList(
-                Arrays.asList("REV","By Car","For","Switching","Transport","Hazard","Customer","Demurrage","Cancelled","Diverted","Total"),
-                Arrays.asList("\"\"",NONE,"Customer","Tariff","Tariff","Fee","Discount","Fee","Mulct","Mulct","Revenue"),
-                Arrays.asList("RDR","------- : (E) CPX   10002   - Tank Oil","NI Spur",NONE,NONE,NONE,NONE,NONE,"$150.00",NONE,"$150.00"),
-                Arrays.asList("RDR","------- : (L) CP    777     - FlatWood","NI Spur",NONE,NONE,NONE,NONE,"$100.00",NONE,NONE,"$100.00"),
-                Arrays.asList("RDR","Pick up : (E) CPX   20002   - Tank Oil","NI Spur","$150.00","$20.00",NONE,"$42.50",NONE,NONE,NONE,"$127.50"),
-                Arrays.asList("RDR","Pick up : (L) CP    888     - HopGrain","NI Spur","$250.00",NONE,NONE,"$62.50",NONE,NONE,"$250.00","$437.50"),
-                Arrays.asList("RDR","Pick up : (L) CP    99      - HopCoal","NI Spur","$250.00","$20.00",NONE,"$67.50",NONE,NONE,NONE,"$202.50"),
-                Arrays.asList("RDR","Set out : (L) CPX   10001   - Tank Oil","NI Spur","$250.00","$20.00","$150.00","$105.00",NONE,NONE,NONE,"$315.00"),
-                Arrays.asList("RDR","Set out : (L) CPX   10003   - Tank Oil","NI Spur","$250.00","$20.00",NONE,"$67.50",NONE,NONE,NONE,"$202.50"),
-                Arrays.asList("RDR","Set out : (L) CPX   20001   - Coilcar","NI Spur","$300.00","$20.00",NONE,"$80.00",NONE,NONE,NONE,"$240.00"),
-                Collections.singletonList(NONE),
-                Arrays.asList("REV","By Customer","Discount","Switching","Transport","Hazard","Customer","Demurrage","Cancelled","Diverted","Total"),
-                Arrays.asList("\"\"",NONE,"Rate","Tariff","Tariff","Fee","Discount","Fee","Mulct","Mulct","Revenue"),
-                Arrays.asList("RDR","NI Spur","25.00%","\"$1,450.00\"","$100.00","$150.00","$425.00","$100.00","$150.00","$250.00","\"$1,775.00\""),
-                Collections.singletonList(NONE),
-                Arrays.asList("REV","By Train","Route","Switching","Transport","Hazard","Customer","Demurrage","Cancelled","Diverted","Total"),
-                Arrays.asList("\"\"",NONE,"Rate","Tariff","Tariff","Fee","Discount","Fee","Mulct","Mulct","Revenue"),
-                Arrays.asList("RDR","Train SFF","$40.00","\"$1,450.00\"","$100.00","$150.00","$425.00","$100.00","$150.00","$250.00","\"$1,775.00\"")
-        );
+        List<List<String>> expected = Arrays.asList(Arrays.asList("REV", "By Car", "For", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Customer", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "------- : (L) CP    99      - HopCoal", "NI Spur", NONE, NONE, NONE, NONE, "$100.00", NONE, NONE, "$100.00"), Arrays.asList("RDR", "------- : (L) CPX   10001   - Tank Oil", "NI Spur", NONE, NONE, NONE, NONE, NONE, "$150.00", NONE, "$150.00"), Arrays.asList("RDR", "Pick up : (E) CPX   20002   - Tank Oil", "NI Spur", "$150.00", "$20.00", NONE, "$42.50", NONE, NONE, NONE, "$127.50"), Arrays.asList("RDR", "Pick up : (L) CP    777     - FlatWood", "NI Spur", "$350.00", NONE, NONE, "$87.50", NONE, NONE, "$250.00", "$512.50"), Arrays.asList("RDR", "Pick up : (L) CP    888     - HopGrain", "NI Spur", "$250.00", "$20.00", "$150.00", "$105.00", NONE, NONE, NONE, "$315.00"), Arrays.asList("RDR", "Set out : (E) CPX   10002   - Tank Oil", "NI Spur", "$150.00", "$20.00", NONE, "$42.50", NONE, NONE, NONE, "$127.50"), Arrays.asList("RDR", "Set out : (L) CPX   10003   - Tank Oil", "NI Spur", "$250.00", "$20.00", NONE, "$67.50", NONE, NONE, NONE, "$202.50"), Arrays.asList("RDR", "Set out : (L) CPX   20001   - Coilcar", "NI Spur", "$300.00", "$20.00", NONE, "$80.00", NONE, NONE, NONE, "$240.00"), Collections.singletonList(NONE), Arrays.asList("REV", "By Customer", "Discount", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "NI Spur", "25.00%", "\"$1,450.00\"", "$100.00", "$150.00", "$425.00", "$100.00", "$150.00", "$250.00", "\"$1,775.00\""), Collections.singletonList(NONE), Arrays.asList("REV", "By Train", "Route", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "Train SFF", "$40.00", "\"$1,450.00\"", "$100.00", "$150.00", "$425.00", "$100.00", "$150.00", "$250.00", "\"$1,775.00\""));
 
         int rowIndex = 29;
         for (List<String> expectedList : expected) {
@@ -454,63 +397,9 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         }
     }
 
-    private void verifyTrain2CsvRevenueUS_3(TreeMap<Integer, List<String>> cellMap) {
+    private void verifyTrain2CsvRevenueFRCarSetB(TreeMap<Integer, List<String>> cellMap) {
 
-        List<List<String>> expected = Arrays.asList(
-                Arrays.asList("REV","By Car","For","Switching","Transport","Hazard","Customer","Demurrage","Cancelled","Diverted","Total"),
-                Arrays.asList("\"\"",NONE,"Customer","Tariff","Tariff","Fee","Discount","Fee","Mulct","Mulct","Revenue"),
-                Arrays.asList("RDR","------- : (L) CP    99      - HopCoal","NI Spur",NONE,NONE,NONE,NONE,"$100.00",NONE,NONE,"$100.00"),
-                Arrays.asList("RDR","------- : (L) CPX   10001   - Tank Oil","NI Spur",NONE,NONE,NONE,NONE,NONE,"$150.00",NONE,"$150.00"),
-                Arrays.asList("RDR","Pick up : (E) CPX   20002   - Tank Oil","NI Spur","$150.00","$20.00",NONE,"$42.50",NONE,NONE,NONE,"$127.50"),
-                Arrays.asList("RDR","Pick up : (L) CP    777     - FlatWood","NI Spur","$350.00",NONE,NONE,"$87.50",NONE,NONE,"$250.00","$512.50"),
-                Arrays.asList("RDR","Pick up : (L) CP    888     - HopGrain","NI Spur","$250.00","$20.00","$150.00","$105.00",NONE,NONE,NONE,"$315.00"),
-                Arrays.asList("RDR","Set out : (E) CPX   10002   - Tank Oil","NI Spur","$150.00","$20.00",NONE,"$42.50",NONE,NONE,NONE,"$127.50"),
-                Arrays.asList("RDR","Set out : (L) CPX   10003   - Tank Oil","NI Spur","$250.00","$20.00",NONE,"$67.50",NONE,NONE,NONE,"$202.50"),
-                Arrays.asList("RDR","Set out : (L) CPX   20001   - Coilcar","NI Spur","$300.00","$20.00",NONE,"$80.00",NONE,NONE,NONE,"$240.00"),
-                Collections.singletonList(NONE),
-                Arrays.asList("REV","By Customer","Discount","Switching","Transport","Hazard","Customer","Demurrage","Cancelled","Diverted","Total"),
-                Arrays.asList("\"\"",NONE,"Rate","Tariff","Tariff","Fee","Discount","Fee","Mulct","Mulct","Revenue"),
-                Arrays.asList("RDR","NI Spur","25.00%","\"$1,450.00\"","$100.00","$150.00","$425.00","$100.00","$150.00","$250.00","\"$1,775.00\""),
-                Collections.singletonList(NONE),
-                Arrays.asList("REV","By Train","Route","Switching","Transport","Hazard","Customer","Demurrage","Cancelled","Diverted","Total"),
-                Arrays.asList("\"\"",NONE,"Rate","Tariff","Tariff","Fee","Discount","Fee","Mulct","Mulct","Revenue"),
-                Arrays.asList("RDR","Train SFF","$40.00","\"$1,450.00\"","$100.00","$150.00","$425.00","$100.00","$150.00","$250.00","\"$1,775.00\"")
-        );
-
-        int rowIndex = 29;
-        for (List<String> expectedList : expected) {
-            List<String> actualList = cellMap.get(rowIndex++);
-            assertEquals(expectedList.size(), actualList.size(), "row size mismatch in row " + rowIndex + "\n\t" + expectedList + "\n\t" + actualList);
-            for (int i = 0; i < expectedList.size(); i++) {
-                String expectedValue = expectedList.get(i);
-                String actualValue = actualList.get(i);
-                assertEquals(expectedValue, actualValue, "mismatch in row " + rowIndex + " at column " + (i + 1) + "\n\t" + expectedList + "\n\t" + actualList);
-            }
-        }
-    }
-
-    private void verifyTrain2CsvRevenueFR(TreeMap<Integer, List<String>> cellMap) {
-
-        List<List<String>> expected = Arrays.asList(
-                Arrays.asList("REV","En voiture de chemin de fer","Pour","Commutation","Transport","Risquer","Client","Surestarie","Annulé","Dévié","Le total"),
-                Arrays.asList("\"\"",NONE,"Client","Tarif","Tarif","Honoraires","Remise","Honoraires","Amende","Amende","Revenu"),
-                Arrays.asList("RDR","-------- : (L) CP    99      - HopCoal","NI Spur",NONE,NONE,NONE,NONE,"\"100,00 €\"",NONE,NONE,"\"100,00 €\""),
-                Arrays.asList("RDR","-------- : (L) CPX   10001   - Tank Oil","NI Spur",NONE,NONE,NONE,NONE,NONE,"\"150,00 €\"",NONE,"\"150,00 €\""),
-                Arrays.asList("RDR","Collecte : (E) CPX   20002   - Tank Oil","NI Spur","\"150,00 €\"","\"20,00 €\"",NONE,"\"42,50 €\"",NONE,NONE,NONE,"\"127,50 €\""),
-                Arrays.asList("RDR","Collecte : (L) CP    777     - FlatWood","NI Spur","\"350,00 €\"",NONE,NONE,"\"87,50 €\"",NONE,NONE,"\"250,00 €\"","\"512,50 €\""),
-                Arrays.asList("RDR","Collecte : (L) CP    888     - HopGrain","NI Spur","\"250,00 €\"","\"20,00 €\"","\"150,00 €\"","\"105,00 €\"",NONE,NONE,NONE,"\"315,00 €\""),
-                Arrays.asList("RDR","Dépose   : (E) CPX   10002   - Tank Oil","NI Spur","\"150,00 €\"","\"20,00 €\"",NONE,"\"42,50 €\"",NONE,NONE,NONE,"\"127,50 €\""),
-                Arrays.asList("RDR","Dépose   : (L) CPX   10003   - Tank Oil","NI Spur","\"250,00 €\"","\"20,00 €\"",NONE,"\"67,50 €\"",NONE,NONE,NONE,"\"202,50 €\""),
-                Arrays.asList("RDR","Dépose   : (L) CPX   20001   - Coilcar","NI Spur","\"300,00 €\"","\"20,00 €\"",NONE,"\"80,00 €\"",NONE,NONE,NONE,"\"240,00 €\""),
-                Collections.singletonList(NONE),
-                Arrays.asList("REV","Par le client","Remise","Commutation","Transport","Risquer","Client","Surestarie","Annulé","Dévié","Le total"),
-                Arrays.asList("\"\"",NONE,"Tarif","Tarif","Tarif","Honoraires","Remise","Honoraires","Amende","Amende","Revenu"),
-                Arrays.asList("RDR","NI Spur","\"25,00 %\"","\"1 450,00 €\"","\"100,00 €\"","\"150,00 €\"","\"425,00 €\"","\"100,00 €\"","\"150,00 €\"","\"250,00 €\"","\"1 775,00 €\""),
-                Collections.singletonList(NONE),
-                Arrays.asList("REV","Par le train","Route","Commutation","Transport","Risquer","Client","Surestarie","Annulé","Dévié","Le total"),
-                Arrays.asList("\"\"",NONE,"Tarif","Tarif","Tarif","Honoraires","Remise","Honoraires","Amende","Amende","Revenu"),
-                Arrays.asList("RDR","Train SFF","\"40,00 €\"","\"1 450,00 €\"","\"100,00 €\"","\"150,00 €\"","\"425,00 €\"","\"100,00 €\"","\"150,00 €\"","\"250,00 €\"","\"1 775,00 €\"")
-        );
+        List<List<String>> expected = Arrays.asList(Arrays.asList("REV", "En voiture de chemin de fer", "Pour", "Commutation", "Transport", "Risquer", "Client", "Surestarie", "Annulé", "Dévié", "Le total"), Arrays.asList("\"\"", NONE, "Client", "Tarif", "Tarif", "Honoraires", "Remise", "Honoraires", "Amende", "Amende", "Revenu"), Arrays.asList("RDR", "-------- : (L) CP    99      - HopCoal", "NI Spur", NONE, NONE, NONE, NONE, "\"100,00 €\"", NONE, NONE, "\"100,00 €\""), Arrays.asList("RDR", "-------- : (L) CPX   10001   - Tank Oil", "NI Spur", NONE, NONE, NONE, NONE, NONE, "\"150,00 €\"", NONE, "\"150,00 €\""), Arrays.asList("RDR", "Collecte : (E) CPX   20002   - Tank Oil", "NI Spur", "\"150,00 €\"", "\"20,00 €\"", NONE, "\"42,50 €\"", NONE, NONE, NONE, "\"127,50 €\""), Arrays.asList("RDR", "Collecte : (L) CP    777     - FlatWood", "NI Spur", "\"350,00 €\"", NONE, NONE, "\"87,50 €\"", NONE, NONE, "\"250,00 €\"", "\"512,50 €\""), Arrays.asList("RDR", "Collecte : (L) CP    888     - HopGrain", "NI Spur", "\"250,00 €\"", "\"20,00 €\"", "\"150,00 €\"", "\"105,00 €\"", NONE, NONE, NONE, "\"315,00 €\""), Arrays.asList("RDR", "Dépose   : (E) CPX   10002   - Tank Oil", "NI Spur", "\"150,00 €\"", "\"20,00 €\"", NONE, "\"42,50 €\"", NONE, NONE, NONE, "\"127,50 €\""), Arrays.asList("RDR", "Dépose   : (L) CPX   10003   - Tank Oil", "NI Spur", "\"250,00 €\"", "\"20,00 €\"", NONE, "\"67,50 €\"", NONE, NONE, NONE, "\"202,50 €\""), Arrays.asList("RDR", "Dépose   : (L) CPX   20001   - Coilcar", "NI Spur", "\"300,00 €\"", "\"20,00 €\"", NONE, "\"80,00 €\"", NONE, NONE, NONE, "\"240,00 €\""), Collections.singletonList(NONE), Arrays.asList("REV", "Par le client", "Remise", "Commutation", "Transport", "Risquer", "Client", "Surestarie", "Annulé", "Dévié", "Le total"), Arrays.asList("\"\"", NONE, "Tarif", "Tarif", "Tarif", "Honoraires", "Remise", "Honoraires", "Amende", "Amende", "Revenu"), Arrays.asList("RDR", "NI Spur", "\"25,00 %\"", "\"1 450,00 €\"", "\"100,00 €\"", "\"150,00 €\"", "\"425,00 €\"", "\"100,00 €\"", "\"150,00 €\"", "\"250,00 €\"", "\"1 775,00 €\""), Collections.singletonList(NONE), Arrays.asList("REV", "Par le train", "Route", "Commutation", "Transport", "Risquer", "Client", "Surestarie", "Annulé", "Dévié", "Le total"), Arrays.asList("\"\"", NONE, "Tarif", "Tarif", "Tarif", "Honoraires", "Remise", "Honoraires", "Amende", "Amende", "Revenu"), Arrays.asList("RDR", "Train SFF", "\"40,00 €\"", "\"1 450,00 €\"", "\"100,00 €\"", "\"150,00 €\"", "\"425,00 €\"", "\"100,00 €\"", "\"150,00 €\"", "\"250,00 €\"", "\"1 775,00 €\""));
 
         int rowIndex = 29;
         for (List<String> expectedList : expected) {
