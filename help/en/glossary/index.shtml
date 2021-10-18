@@ -823,7 +823,8 @@
           <tr>
             <td class="app">Ops</td>
             <td class="en">Revenue</td>
-            <td class="descr">Income from freight charges assessed.</td>
+            <td class="descr">Income from freight charges assessed to rail service customers, including tariffs,
+              penalties, and demurrage fees.</td>
             <td class="de">Einnahmen</td>
             <td class="it">Reddito</td>
             <td class="fr">Revenu</td>

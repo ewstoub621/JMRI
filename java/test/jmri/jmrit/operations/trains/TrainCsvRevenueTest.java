@@ -2,14 +2,17 @@ package jmri.jmrit.operations.trains;
 
 import jmri.InstanceManager;
 import jmri.jmrit.operations.OperationsTestCase;
+import jmri.jmrit.operations.locations.Location;
 import jmri.jmrit.operations.locations.LocationManager;
 import jmri.jmrit.operations.locations.Track;
 import jmri.jmrit.operations.rollingstock.cars.Car;
 import jmri.jmrit.operations.rollingstock.cars.CarManager;
 import jmri.jmrit.operations.rollingstock.cars.CarTypes;
+import jmri.jmrit.operations.routes.Route;
 import jmri.jmrit.operations.routes.RouteLocation;
 import jmri.jmrit.operations.routes.RouteManager;
 import jmri.jmrit.operations.setup.Setup;
+import jmri.jmrit.operations.setup.TrainRevenues;
 import jmri.util.JUnitOperationsUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,29 +21,19 @@ import org.junit.jupiter.api.Test;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.text.NumberFormat;
 import java.util.*;
 
+import static java.util.Locale.*;
 import static jmri.jmrit.operations.trains.Train.NONE;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * TrainCsvRevenueTest tests a train's revenue report
+ * TrainCsvRevenueTest tests a train's revenue report for multiple locales
  *
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainCsvRevenueTest extends OperationsTestCase {
-    private static final String LOCATION_ID_HEAD = "1";
-    private static final String LOCATION_ID_SPUR = "20";
-    private static final String LOCATION_ID_TERM = "3";
-
-    private static final String TRACK_ID_HEAD = "1s1";
-    private static final String TRACK_ID_SPUR = "20s1";
-    private static final String TRACK_ID_TERM1 = "3s1";
-    private static final String TRACK_ID_TERM2 = "3s2";
-
-    private static final List<String> CAR_SET_A = Arrays.asList("CP777", "CPX10001", "CPX10002", "CP888");
-    private static final List<String> CAR_SET_B = Arrays.asList("CP99", "CP888", "CPX10001", "CP777");
-
     private CarManager carManager;
     private CarTypes carTypes;
     private LocationManager locationManager;
@@ -49,6 +42,12 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     private TrainManagerXml trainManagerXml;
 
     private Locale defaultLocale;
+
+    private static final String CANCEL_CAR_ID = "GBW 906";
+    private static final String DIVERT_CAR_ID = "CDLX 287";
+    private static final String ROUTE_ID = "3";
+    private static final String ROUTE_DIVERT_LOCATION_ID = "1r1";
+
     private List<Track> tracks;
 
     @Override
@@ -71,14 +70,14 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         JUnitOperationsUtil.initOperationsData();
         Setup.setSaveTrainRevenuesEnabled(true);
 
-        defaultLocale = Locale.getDefault(); // save the default locale.
+        defaultLocale = getDefault(); // save the default locale.
     }
 
     @Override
     @AfterEach
     public void tearDown() {
         JUnitOperationsUtil.checkOperationsShutDownTask();
-        Locale.setDefault(defaultLocale);
+        setDefault(defaultLocale);
 
         super.tearDown();
     }
@@ -86,147 +85,238 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     @Test
     public void testCTor() throws IOException {
         Train train = trainManager.getTrainById("1");
-        updateRailroadName(train, ": Test CTor with Train 1");
         assertTrue(train.build());
+
+        File trainRevenuesSerFile = TrainRevenues.getTrainRevenuesSerFile(train);
+        assertNotNull(trainRevenuesSerFile, "exists");
 
         train.terminate();
         assertFalse(train.isBuilt());
 
-        TrainCsvRevenue t = new TrainCsvRevenue(train);
-        assertNotNull(t, "exists");
+        File trainRevenuesFile = TrainRevenues.getTrainRevenuesCsvFile(train);
+        assertNotNull(trainRevenuesFile, "exists");
     }
 
     @Test
-    public void testCreateCsvRevenueTrain1WithTransportCharges() throws IOException {
-        int trainNumber = 1;
-
-        Train train = setUpTrain(String.valueOf(trainNumber));
-        updateRailroadName(train, ": test train #" + trainNumber + ", with transport charges");
-
-        assertTrue(train.build());
-
-        train.terminate();
-        assertFalse(train.isBuilt());
-
-        TreeMap<Integer, List<String>> cellMap = getCsvRevenueAsTreeMap(train);
-
-        verifyTrain1CsvRevenueUS(cellMap);
-    }
-
-    @Test
-    public void testCreateCsvRevenueTrain2WithAllChargesCarSetA() throws IOException {
-        int trainNumber = 2;
-
-        Train train = setUpTrain(String.valueOf(trainNumber));
-        updateRailroadName(train, ": test train #" + trainNumber + ", with all charges");
-
-        addDemurrage(CAR_SET_A.get(0));
-
-        assertTrue(train.build());
-
-        addSwitching();
-        addHazardous(CAR_SET_A.get(1));
-        addCancelMulct(CAR_SET_A.get(2));
-        addDivertMulct(CAR_SET_A.get(3));
-
-        train.terminate();
-        assertFalse(train.isBuilt());
-
-        TreeMap<Integer, List<String>> cellMap = getCsvRevenueAsTreeMap(train);
-
-        verifyTrain2CsvRevenueUSCarSetA(cellMap);
-    }
-
-    @Test
-    public void testCreateCsvRevenueTrain2WithAllRestartsCarSetB() throws IOException {
-        int trainNumber = 2;
-
-        Train train = setUpTrain(String.valueOf(trainNumber));
-        updateRailroadName(train, ": test train #" + trainNumber + ", with all restarts");
-
-        addDemurrage(CAR_SET_B.get(0));
-
-        assertTrue(train.build());
-
-        addSwitching();
-        addHazardous(CAR_SET_B.get(1));
-        addCancelMulct(CAR_SET_B.get(2));
-        addDivertMulct(CAR_SET_B.get(3));
-
-        verifyRestartMoveRestoreCycle(train);
-        verifyRestartMoveRestoreCycle(train);
-
-        train.terminate();
-        assertFalse(train.isBuilt());
-
-        TreeMap<Integer, List<String>> cellMap = getCsvRevenueAsTreeMap(train);
-
-        verifyTrain2CsvRevenueUSCarSetB(cellMap);
-    }
-
-    @Test
-    public void testCreateCsvRevenueTrain2WithLocaleFranceCarSetB() throws IOException {
-        Locale.setDefault(Locale.FRANCE);
-
+    public void testCreateCsvRevenueTrainDK() throws IOException {
         try {
-            int trainNumber = 2;
-
-            Train train = setUpTrain(String.valueOf(trainNumber));
-            updateRailroadName(train, ": test train #" + trainNumber + ", with Locale.FRANCE");
-
-            addDemurrage(CAR_SET_B.get(0));
-
-            assertTrue(train.build());
-
-            addSwitching();
-            addHazardous(CAR_SET_B.get(1));
-            addCancelMulct(CAR_SET_B.get(2));
-            addDivertMulct(CAR_SET_B.get(3));
-
-            train.terminate();
-            assertFalse(train.isBuilt());
-
-            TreeMap<Integer, List<String>> cellMap = getCsvRevenueAsTreeMap(train);
-
-            verifyTrain2CsvRevenueFRCarSetB(cellMap);
+            setDefault(new Locale("da", "DK"));
+            createBuildVerifyTrain3(true);
         } finally {
-            Locale.setDefault(Locale.US);
+            setDefault(defaultLocale);
         }
     }
 
-    private void addCancelMulct(String carId) {
-        Car car = carManager.getById(carId);
+    @Test
+    public void testCreateCsvRevenueTrainFR() throws IOException {
+        try {
+            setDefault(FRANCE);
+            createBuildVerifyTrain3(false);
+        } finally {
+            setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    public void testCreateCsvRevenueTrainDE() throws IOException {
+        try {
+            setDefault(GERMANY);
+            createBuildVerifyTrain3(false);
+        } finally {
+            setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    public void testCreateCsvRevenueTrainGB() throws IOException {
+        try {
+            setDefault(UK);
+            createBuildVerifyTrain3(false);
+        } finally {
+            setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    public void testCreateCsvRevenueTrainIT() throws IOException {
+        try {
+            setDefault(ITALY);
+            createBuildVerifyTrain3(false);
+        } finally {
+            setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    public void testCreateCsvRevenueTrainJP() throws IOException {
+        try {
+            setDefault(JAPAN);
+            createBuildVerifyTrain3(false);
+        } finally {
+            setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    public void testCreateCsvRevenueTrainNL() throws IOException {
+        try {
+            setDefault(new Locale("nl", "NL"));
+            createBuildVerifyTrain3(false);
+        } finally {
+            setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    public void testCreateCsvRevenueTrainUS() throws IOException {
+        try {
+            setDefault(US);
+            createBuildVerifyTrain3(true);
+        } finally {
+            setDefault(defaultLocale);
+        }
+    }
+
+    private void addCancelMulct() {
+        Car car = carManager.getById(CANCEL_CAR_ID);
         car.setRouteLocation(null);
         car.setRouteDestination(null);
     }
 
-    private void addDemurrage(String carId) {
-        carManager.getById(carId).setWait(4);
+    private void addDivertMulct() {
+        Car car = carManager.getById(DIVERT_CAR_ID);
+        Track track = tracks.get(1);
+
+        car.setDestination(track.getLocation(), track);
+
+        Route route = routeManager.getRouteById(ROUTE_ID);
+        RouteLocation routeLocation = route.getLocationById(ROUTE_DIVERT_LOCATION_ID);
+
+        car.setRouteDestination(routeLocation);
     }
 
-    private void addDivertMulct(String carId) {
-        carManager.getById(carId).setRouteDestination(routeManager.getRouteById("1").getLocationById("1r2"));
+    /**
+     *
+     * @param restartMove optional switch for simulating JMRI shutdown and restart events between moves
+     */
+    private void createBuildVerifyTrain3(boolean restartMove) throws IOException {
+        Train train = createTrain3();
+        assertTrue(train.build());
+
+        addCancelMulct();
+        addDivertMulct();
+
+        if (restartMove) {
+            verifyRestartMoveRestoreCycle(train);
+            verifyRestartMoveRestoreCycle(train);
+        }
+
+        train.terminate();
+        assertFalse(train.isBuilt());
+
+        verifyTrainCsvRevenue(getCsvRevenueAsTreeMap(train));
     }
 
-    private void addHazardous(String carId) {
-        carManager.getById(carId).setHazardous(true);
+    private Location createLocation(String locId, String locName) {
+        Location loc = new Location(locId, locName);
+        loc.setSwitchListEnabled(true);
+
+        locationManager.register(loc);
+
+        return loc;
     }
 
-    private void addSwitching() {
-        Track track = locationManager.getLocationById(LOCATION_ID_SPUR).getTrackById(TRACK_ID_SPUR);
-        track.setTrackType(Track.SPUR);
-        track.setName(track.getName().replace(Track.YARD, Track.SPUR));
+    /**
+     *
+     * set up a route of 4 locations:
+     *   West Terminal - 1 staging track
+     *   West Industry - 1 spur
+     *   East Industry - 1 spur
+     *   East Terminal - 1 staging track
+     *
+     * @return 4-location route object
+     */
+    private Route createRoute(String id) {
+        int i;
+        i = -1;
+        List<Location> locations = new ArrayList<>();
+        locations.add(createLocation(String.valueOf(++i), "West Terminal"));
+        locations.add(createLocation(String.valueOf(++i), "West Industry"));
+        locations.add(createLocation(String.valueOf(++i), "East Industry"));
+        locations.add(createLocation(String.valueOf(++i), "East Terminal"));
+
+        i = -1;
+        tracks = new ArrayList<>();
+        tracks.add(createNewTrack(++i + "s1", locations.get(i), "West Terminal", Track.STAGING, 400));
+        tracks.add(createNewTrack(++i + "s1", locations.get(i), "West Industry", Track.SPUR, 360));
+        tracks.add(createNewTrack(++i + "s1", locations.get(i), "East Industry", Track.SPUR, 600));
+        tracks.add(createNewTrack(++i + "s1", locations.get(i), "East Terminal", Track.STAGING, 350));
+
+        Route route = new Route(id, "Route" + id);
+
+        i = -1;
+        registerNewRouteLocation(++i + "r1", i, locations.get(i), route);
+        registerNewRouteLocation(++i + "r1", i, locations.get(i), route);
+        registerNewRouteLocation(++i + "r1", i, locations.get(i), route);
+        registerNewRouteLocation(++i + "r1", i, locations.get(i), route);
+
+        routeManager.register(route);
+
+        return route;
     }
 
+    private Track createNewTrack(String trackId, Location location, String trackName, String trackType, int trackLength) {
+        Track track = new Track(trackId, trackName, trackType, location);
+        track.setLength(trackLength);
+
+        location.register(track);
+
+        return track;
+    }
+
+    /**
+     * creates a new Route with id 3
+     * creates a new Train with id 3
+     *
+     * @return new Train object with new Route
+     */
+    private Train createTrain3() {
+        String id= "3";
+        Setup.setStagingTrainCheckEnabled(false);
+        Setup.setBuildAggressive(false);
+        Setup.setMaxTrainLength(400);
+
+        Route route = createRoute(id);
+
+        Train train = new Train(id, "CP " + id);
+        train.setRequirements(Train.CABOOSE);
+        train.setCabooseRoad("CP");
+        train.setRoute(route);
+        train.setDepartureTime("6", "5");
+        train.setComment("Test comment for train CP " + id);
+        train.setDescription("Train CP " + id);
+
+        trainManager.register(train);
+
+        registerNewCars(train);
+
+        return train;
+    }
+
+    /**
+     * reads the entire csv revenue file into a treemap of rows of CSV values
+     *
+     * @return TreeMap representing the CSV file contents
+     */
     private TreeMap<Integer, List<String>> getCsvRevenueAsTreeMap(Train train) throws IOException {
         TreeMap<Integer, List<String>> map = new TreeMap<>();
 
-        File csvRevenueFile = train.getTrainRevenues().getCsvRevenueFile(train);
-        assertNotNull(csvRevenueFile, "exists");
+        File trainRevenuesCsvFile = TrainRevenues.getTrainRevenuesCsvFile(train);
+        assertNotNull(trainRevenuesCsvFile, "exists");
 
         int rows = 0;
         String line;
-        BufferedReader in = JUnitOperationsUtil.getBufferedReader(csvRevenueFile);
+        BufferedReader in = JUnitOperationsUtil.getBufferedReader(trainRevenuesCsvFile);
         while ((line = in.readLine()) != null) {
             String[] cells = line.split(",");
             List<String> rowCells = new ArrayList<>();
@@ -252,38 +342,46 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         return map;
     }
 
-    private Train setUpTrain(String id) {
-        Train train = trainManager.getTrainById(id);
+    private void registerNewCars(Train train) {
+        ResourceBundle rb = ResourceBundle.getBundle("jmri.jmrit.operations.JmritOperationsBundle");
 
-        for (Car car : carManager.getList()) {
-            if (car.getNumber().startsWith("X")) {
-                car.setRoadName(car.getRoadName() + "X");
-                car.setNumber(car.getNumber().substring(1));
-                assertTrue(car.getRoadName().endsWith("X"));
-                assertFalse(car.getNumber().startsWith("X"));
-            }
-        }
+        updateCar(train, "CP", "C10099", rb.getString("Caboose"), "E", tracks.get(0));
 
-        updateTrackList();
+        updateCar(train, "CDLX ", "287", "RB", "E", tracks.get(0));
+        updateCar(train, "CONX ", "5092", "Tank Oil", "L", tracks.get(0)).setHazardous(true);
+        updateCar(train, "C&O ", "1002", "FlatTimber", "L", tracks.get(0));
+        updateCar(train, "C&O ", "51137", "FD-coil", "L", tracks.get(0));
+        updateCar(train, "EORX ", "18554", "Tank Oil", "E", tracks.get(0)).setHazardous(true);
 
-        updateCar(train, "CPX", "10001", "Tank Oil", "L", 0, 1);
-        updateCar(train, "CPX", "10002", "Tank Oil", "E", 0, 1);
-        updateCar(train, "CPX", "10003", "Tank Oil", "L", 0, 1);
-        updateCar(train, "CPX", "20001", "Coilcar", "L", 0, 1);
+        updateCar(train, "FCKX ", "6302", "RB", "L", tracks.get(1)).setWait(4);
+        updateCar(train, "GBW ", "906", "Boxcar", "L", tracks.get(1));
+        updateCar(train, "NKP ", "99713", "HopGrain", "L", tracks.get(1));
+        updateCar(train, "N&W ", "29002", "Stock", "L", tracks.get(1));
+        updateCar(train, "N&W ", "76566", "Hopper", "L", tracks.get(1));
 
-        updateCar(train, "CP", "777", "FlatWood", "L", 1, 2);
-        updateCar(train, "CP", "888", "HopGrain", "L", 1, 2);
-        updateCar(train, "CP", "99", "HopCoal", "L", 1, 2);
-        updateCar(train, "CPX", "20002", "Tank Oil", "E", 1, 2);
-
-        for (RouteLocation rl : routeManager.getRouteById("1").getLocationsBySequenceList()) {
-            rl.setMaxCarMoves(20);
-        }
-
-        return train;
+        updateCar(train, "PRR ", "24166", "Boxcar", "L", tracks.get(2));
+        updateCar(train, "PRR ", "220874", "Hopper", "L", tracks.get(2));
+        updateCar(train, "UP ", "46774D", "Stock", "L", tracks.get(2));
+        updateCar(train, "VGN ", "15508", "Hopper", "L", tracks.get(2));
+        updateCar(train, "VGN ", "15779", "Hopper", "L", tracks.get(2));
     }
 
-    private void updateCar(Train train, String road, String number, String type, String load, int thisTrack, int lastTrack) {
+    private void registerNewRouteLocation(String rlId, int sequenceNumber, Location location, Route route) {
+        RouteLocation rl = new RouteLocation(rlId, location);
+        rl.setSequenceNumber(sequenceNumber);
+        rl.setTrainDirection(RouteLocation.EAST);
+        rl.setMaxCarMoves(25);
+        rl.setMaxTrainLength(1000);
+
+        route.register(rl);
+    }
+
+    /**
+     * creates a new car as needed and ensures all interested parties accept the car load and type
+     *
+     * @return updated Car object
+     */
+    private Car updateCar(Train train, String road, String number, String type, String load, Track thisTrack) {
         Car car = carManager.getById(road + number);
         if (car == null) {
             car = carManager.newRS(road, number);
@@ -297,11 +395,9 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         updateLoadName(load, tracks, train, car);
         updateTypeName(type, carTypes, tracks, train, car);
 
-        Track currentTrack = tracks.get(thisTrack);
-        Track destinyTrack = tracks.get(lastTrack);
+        car.setLocation(thisTrack.getLocation(), thisTrack);
 
-        car.setLocation(currentTrack.getLocation(), currentTrack);
-        car.setDestination(destinyTrack.getLocation(), destinyTrack);
+        return car;
     }
 
     private void updateLoadName(String loadName, List<Track> tracks, Train train, Car car) {
@@ -310,20 +406,6 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         }
         train.addLoadName(loadName);
         car.setLoadName(loadName);
-    }
-
-    private void updateRailroadName(Train train, String testDescription) {
-        String railRoadName = train.getRailroadName().isEmpty() ? Setup.getRailroadName() : train.getRailroadName();
-        train.setRailroadName(railRoadName + testDescription);
-    }
-
-    private void updateTrackList() {
-        tracks = new ArrayList<>();
-
-        tracks.add(locationManager.getLocationById(LOCATION_ID_HEAD).getTrackById(TRACK_ID_HEAD));
-        tracks.add(locationManager.getLocationById(LOCATION_ID_SPUR).getTrackById(TRACK_ID_SPUR));
-        tracks.add(locationManager.getLocationById(LOCATION_ID_TERM).getTrackById(TRACK_ID_TERM1));
-        tracks.add(locationManager.getLocationById(LOCATION_ID_TERM).getTrackById(TRACK_ID_TERM2));
     }
 
     private void updateTypeName(String typeName, CarTypes carTypes, List<Track> tracks, Train train, Car car) {
@@ -349,68 +431,48 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         assertTrue(trainManagerXml.getTrainRevenuesSerFile(train).exists());
     }
 
-    private void verifyTrain1CsvRevenueUS(TreeMap<Integer, List<String>> cellMap) {
-
-        List<List<String>> expected = Arrays.asList(Arrays.asList("REV", "By Car", "For", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Customer", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "------- : (E) CPX   10002   - Tank Oil", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CPX   10001   - Tank Oil", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CPX   10003   - Tank Oil", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CPX   20001   - Coilcar", "NI Yard", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (E) CPX   20002   - Tank Oil", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CP    777     - FlatWood", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CP    888     - HopGrain", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Arrays.asList("RDR", "------- : (L) CP    99      - HopCoal", "South End 2", NONE, "$20.00", NONE, NONE, NONE, NONE, NONE, "$20.00"), Collections.singletonList(NONE), Arrays.asList("REV", "By Customer", "Discount", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "NI Yard", NONE, NONE, "$80.00", NONE, NONE, NONE, NONE, NONE, "$80.00"), Arrays.asList("RDR", "South End 2", NONE, NONE, "$80.00", NONE, NONE, NONE, NONE, NONE, "$80.00"), Collections.singletonList(NONE), Arrays.asList("REV", "By Train", "Route", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "Train STF", "$40.00", NONE, "$160.00", NONE, NONE, NONE, NONE, NONE, "$160.00"));
-
-        int rowIndex = 30;
-        for (List<String> expectedList : expected) {
-            List<String> actualList = cellMap.get(rowIndex++);
-            assertEquals(expectedList.size(), actualList.size(), "row size mismatch in row " + rowIndex + "\n\t" + expectedList + "\n\t" + actualList);
-            for (int i = 0; i < expectedList.size(); i++) {
-                String expectedValue = expectedList.get(i);
-                String actualValue = actualList.get(i);
-                assertEquals(expectedValue, actualValue, "mismatch in row " + rowIndex + " at column " + (i + 1) + "\n\t" + expectedList + "\n\t" + actualList);
+    private void verifyTrainCsvRevenue(TreeMap<Integer, List<String>> cellMap) {
+        Locale locale = getDefault();
+        String country = locale.getCountry();
+        if (US.getCountry().equals(country)) {
+            int rowIndex = 30;
+            List<List<String>> expected = Arrays.asList(
+                    Arrays.asList("\"\"",NONE,NONE,"Switching","Transport","Hazard","Demurrage","Cancelled","Diverted","Customer","Total"),
+                    Arrays.asList("\"\"",NONE,NONE,"Tariff","Tariff","Tariff","Charge","Mulct","Mulct","Discount","Revenue"),
+                    Arrays.asList("REV","By Car","For Customer"),
+                    Arrays.asList("RDR","Pick up : (L) VGN   15508   - Hopper","East Industry","$480.00","$20.00",NONE,NONE,NONE,NONE,"$125.00","$375.00"),
+                    Arrays.asList("RDR","Set out : (L) N&W   29002   - Stock","East Industry","$480.00","$20.00",NONE,NONE,NONE,NONE,"$125.00","$375.00"),
+                    Arrays.asList("RDR","------- : (E) EORX  18554   - Tank Oil","East Terminal",NONE,"$60.00",NONE,NONE,NONE,NONE,NONE,"$60.00"),
+                    Arrays.asList("RDR","------- : (L) C&O   1002    - FlatTimber","East Terminal",NONE,"$60.00",NONE,NONE,NONE,NONE,NONE,"$60.00"),
+                    Arrays.asList("RDR","------- : (L) CONX  5092    - Tank Oil","East Terminal",NONE,"$60.00","$150.00",NONE,NONE,NONE,NONE,"$210.00"),
+                    Arrays.asList("RDR","------- : (L) FCKX  6302    - RB","West Industry",NONE,NONE,NONE,"$100.00",NONE,NONE,NONE,"$100.00"),
+                    Arrays.asList("RDR","------- : (L) GBW   906     - Boxcar","West Industry",NONE,NONE,NONE,NONE,"$150.00",NONE,NONE,"$150.00"),
+                    Arrays.asList("RDR","Pick up : (L) N&W   76566   - Hopper","West Industry","$480.00","$40.00",NONE,NONE,NONE,NONE,"$78.00","$442.00"),
+                    Arrays.asList("RDR","Pick up : (L) NKP   99713   - HopGrain","West Industry","$250.00","$40.00",NONE,NONE,NONE,NONE,"$43.50","$246.50"),
+                    Arrays.asList("RDR","Set out : (E) CDLX  287     - RB","West Industry","$150.00","$20.00",NONE,NONE,NONE,"$250.00","$25.50","$394.50"),
+                    Arrays.asList("RDR","Set out : (L) C&O   51137   - FD-coil","West Industry","$300.00","$20.00",NONE,NONE,NONE,NONE,"$48.00","$272.00"),
+                    Collections.singletonList(NONE),
+                    Arrays.asList("REV","By Customer", "Discount Rate"),
+                    Arrays.asList("RDR","East Industry","25.00%","$960.00","$40.00",NONE,NONE,NONE,NONE,"$250.00","$750.00"),
+                    Arrays.asList("RDR","East Terminal",NONE,NONE,"$180.00","$150.00",NONE,NONE,NONE,NONE,"$330.00"),
+                    Arrays.asList("RDR","West Industry","15.00%","\"$1,180.00\"","$120.00",NONE,"$100.00","$150.00","$250.00","$195.00","\"$1,605.00\""),
+                    Collections.singletonList(NONE),
+                    Arrays.asList("REV","By Train","Route Rate"),
+                    Arrays.asList("RDR","Train CP 3","$60.00","\"$2,140.00\"","$340.00","$150.00","$100.00","$150.00","$250.00","$445.00","\"$2,685.00\"")
+            );
+            for (List<String> expectedList : expected) {
+                List<String> actualList = cellMap.get(rowIndex++);
+                assertEquals(expectedList.size(), actualList.size(),
+                        "row size mismatch in row " + rowIndex + "\n\t" + expectedList + "\n\t" + actualList);
+                for (int i = 0; i < expectedList.size(); i++) {
+                    assertEquals(expectedList.get(i), actualList.get(i),
+                            "mismatch in row " + rowIndex + " at column " + (i + 1) + "\n\t" + expectedList + "\n\t" + actualList);
+                }
             }
         }
+
+        NumberFormat numberFormat = NumberFormat.getCurrencyInstance(Locale.getDefault());
+        String expectedTotal = "\"" + numberFormat.format(2685) + "\"";
+        assertEquals(expectedTotal, cellMap.get(51).get(10));
     }
-
-    private void verifyTrain2CsvRevenueUSCarSetA(TreeMap<Integer, List<String>> cellMap) {
-
-        List<List<String>> expected = Arrays.asList(Arrays.asList("REV", "By Car", "For", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Customer", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "------- : (E) CPX   10002   - Tank Oil", "NI Spur", NONE, NONE, NONE, NONE, NONE, "$150.00", NONE, "$150.00"), Arrays.asList("RDR", "------- : (L) CP    777     - FlatWood", "NI Spur", NONE, NONE, NONE, NONE, "$100.00", NONE, NONE, "$100.00"), Arrays.asList("RDR", "Pick up : (E) CPX   20002   - Tank Oil", "NI Spur", "$150.00", "$20.00", NONE, "$42.50", NONE, NONE, NONE, "$127.50"), Arrays.asList("RDR", "Pick up : (L) CP    888     - HopGrain", "NI Spur", "$250.00", NONE, NONE, "$62.50", NONE, NONE, "$250.00", "$437.50"), Arrays.asList("RDR", "Pick up : (L) CP    99      - HopCoal", "NI Spur", "$250.00", "$20.00", NONE, "$67.50", NONE, NONE, NONE, "$202.50"), Arrays.asList("RDR", "Set out : (L) CPX   10001   - Tank Oil", "NI Spur", "$250.00", "$20.00", "$150.00", "$105.00", NONE, NONE, NONE, "$315.00"), Arrays.asList("RDR", "Set out : (L) CPX   10003   - Tank Oil", "NI Spur", "$250.00", "$20.00", NONE, "$67.50", NONE, NONE, NONE, "$202.50"), Arrays.asList("RDR", "Set out : (L) CPX   20001   - Coilcar", "NI Spur", "$300.00", "$20.00", NONE, "$80.00", NONE, NONE, NONE, "$240.00"), Collections.singletonList(NONE), Arrays.asList("REV", "By Customer", "Discount", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "NI Spur", "25.00%", "\"$1,450.00\"", "$100.00", "$150.00", "$425.00", "$100.00", "$150.00", "$250.00", "\"$1,775.00\""), Collections.singletonList(NONE), Arrays.asList("REV", "By Train", "Route", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "Train SFF", "$40.00", "\"$1,450.00\"", "$100.00", "$150.00", "$425.00", "$100.00", "$150.00", "$250.00", "\"$1,775.00\""));
-
-        int rowIndex = 29;
-        for (List<String> expectedList : expected) {
-            List<String> actualList = cellMap.get(rowIndex++);
-            assertEquals(expectedList.size(), actualList.size(), "row size mismatch in row " + rowIndex + "\n\t" + expectedList + "\n\t" + actualList);
-            for (int i = 0; i < expectedList.size(); i++) {
-                String expectedValue = expectedList.get(i);
-                String actualValue = actualList.get(i);
-                assertEquals(expectedValue, actualValue, "mismatch in row " + rowIndex + " at column " + (i + 1) + "\n\t" + expectedList + "\n\t" + actualList);
-            }
-        }
-    }
-
-    private void verifyTrain2CsvRevenueUSCarSetB(TreeMap<Integer, List<String>> cellMap) {
-
-        List<List<String>> expected = Arrays.asList(Arrays.asList("REV", "By Car", "For", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Customer", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "------- : (L) CP    99      - HopCoal", "NI Spur", NONE, NONE, NONE, NONE, "$100.00", NONE, NONE, "$100.00"), Arrays.asList("RDR", "------- : (L) CPX   10001   - Tank Oil", "NI Spur", NONE, NONE, NONE, NONE, NONE, "$150.00", NONE, "$150.00"), Arrays.asList("RDR", "Pick up : (E) CPX   20002   - Tank Oil", "NI Spur", "$150.00", "$20.00", NONE, "$42.50", NONE, NONE, NONE, "$127.50"), Arrays.asList("RDR", "Pick up : (L) CP    777     - FlatWood", "NI Spur", "$350.00", NONE, NONE, "$87.50", NONE, NONE, "$250.00", "$512.50"), Arrays.asList("RDR", "Pick up : (L) CP    888     - HopGrain", "NI Spur", "$250.00", "$20.00", "$150.00", "$105.00", NONE, NONE, NONE, "$315.00"), Arrays.asList("RDR", "Set out : (E) CPX   10002   - Tank Oil", "NI Spur", "$150.00", "$20.00", NONE, "$42.50", NONE, NONE, NONE, "$127.50"), Arrays.asList("RDR", "Set out : (L) CPX   10003   - Tank Oil", "NI Spur", "$250.00", "$20.00", NONE, "$67.50", NONE, NONE, NONE, "$202.50"), Arrays.asList("RDR", "Set out : (L) CPX   20001   - Coilcar", "NI Spur", "$300.00", "$20.00", NONE, "$80.00", NONE, NONE, NONE, "$240.00"), Collections.singletonList(NONE), Arrays.asList("REV", "By Customer", "Discount", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "NI Spur", "25.00%", "\"$1,450.00\"", "$100.00", "$150.00", "$425.00", "$100.00", "$150.00", "$250.00", "\"$1,775.00\""), Collections.singletonList(NONE), Arrays.asList("REV", "By Train", "Route", "Switching", "Transport", "Hazard", "Customer", "Demurrage", "Cancelled", "Diverted", "Total"), Arrays.asList("\"\"", NONE, "Rate", "Tariff", "Tariff", "Fee", "Discount", "Fee", "Mulct", "Mulct", "Revenue"), Arrays.asList("RDR", "Train SFF", "$40.00", "\"$1,450.00\"", "$100.00", "$150.00", "$425.00", "$100.00", "$150.00", "$250.00", "\"$1,775.00\""));
-
-        int rowIndex = 29;
-        for (List<String> expectedList : expected) {
-            List<String> actualList = cellMap.get(rowIndex++);
-            assertEquals(expectedList.size(), actualList.size(), "row size mismatch in row " + rowIndex + "\n\t" + expectedList + "\n\t" + actualList);
-            for (int i = 0; i < expectedList.size(); i++) {
-                String expectedValue = expectedList.get(i);
-                String actualValue = actualList.get(i);
-                assertEquals(expectedValue, actualValue, "mismatch in row " + rowIndex + " at column " + (i + 1) + "\n\t" + expectedList + "\n\t" + actualList);
-            }
-        }
-    }
-
-    private void verifyTrain2CsvRevenueFRCarSetB(TreeMap<Integer, List<String>> cellMap) {
-
-        List<List<String>> expected = Arrays.asList(Arrays.asList("REV", "En voiture de chemin de fer", "Pour", "Commutation", "Transport", "Risquer", "Client", "Surestarie", "Annulé", "Dévié", "Le total"), Arrays.asList("\"\"", NONE, "Client", "Tarif", "Tarif", "Honoraires", "Remise", "Honoraires", "Amende", "Amende", "Revenu"), Arrays.asList("RDR", "-------- : (L) CP    99      - HopCoal", "NI Spur", NONE, NONE, NONE, NONE, "\"100,00 €\"", NONE, NONE, "\"100,00 €\""), Arrays.asList("RDR", "-------- : (L) CPX   10001   - Tank Oil", "NI Spur", NONE, NONE, NONE, NONE, NONE, "\"150,00 €\"", NONE, "\"150,00 €\""), Arrays.asList("RDR", "Collecte : (E) CPX   20002   - Tank Oil", "NI Spur", "\"150,00 €\"", "\"20,00 €\"", NONE, "\"42,50 €\"", NONE, NONE, NONE, "\"127,50 €\""), Arrays.asList("RDR", "Collecte : (L) CP    777     - FlatWood", "NI Spur", "\"350,00 €\"", NONE, NONE, "\"87,50 €\"", NONE, NONE, "\"250,00 €\"", "\"512,50 €\""), Arrays.asList("RDR", "Collecte : (L) CP    888     - HopGrain", "NI Spur", "\"250,00 €\"", "\"20,00 €\"", "\"150,00 €\"", "\"105,00 €\"", NONE, NONE, NONE, "\"315,00 €\""), Arrays.asList("RDR", "Dépose   : (E) CPX   10002   - Tank Oil", "NI Spur", "\"150,00 €\"", "\"20,00 €\"", NONE, "\"42,50 €\"", NONE, NONE, NONE, "\"127,50 €\""), Arrays.asList("RDR", "Dépose   : (L) CPX   10003   - Tank Oil", "NI Spur", "\"250,00 €\"", "\"20,00 €\"", NONE, "\"67,50 €\"", NONE, NONE, NONE, "\"202,50 €\""), Arrays.asList("RDR", "Dépose   : (L) CPX   20001   - Coilcar", "NI Spur", "\"300,00 €\"", "\"20,00 €\"", NONE, "\"80,00 €\"", NONE, NONE, NONE, "\"240,00 €\""), Collections.singletonList(NONE), Arrays.asList("REV", "Par le client", "Remise", "Commutation", "Transport", "Risquer", "Client", "Surestarie", "Annulé", "Dévié", "Le total"), Arrays.asList("\"\"", NONE, "Tarif", "Tarif", "Tarif", "Honoraires", "Remise", "Honoraires", "Amende", "Amende", "Revenu"), Arrays.asList("RDR", "NI Spur", "\"25,00 %\"", "\"1 450,00 €\"", "\"100,00 €\"", "\"150,00 €\"", "\"425,00 €\"", "\"100,00 €\"", "\"150,00 €\"", "\"250,00 €\"", "\"1 775,00 €\""), Collections.singletonList(NONE), Arrays.asList("REV", "Par le train", "Route", "Commutation", "Transport", "Risquer", "Client", "Surestarie", "Annulé", "Dévié", "Le total"), Arrays.asList("\"\"", NONE, "Tarif", "Tarif", "Tarif", "Honoraires", "Remise", "Honoraires", "Amende", "Amende", "Revenu"), Arrays.asList("RDR", "Train SFF", "\"40,00 €\"", "\"1 450,00 €\"", "\"100,00 €\"", "\"150,00 €\"", "\"425,00 €\"", "\"100,00 €\"", "\"150,00 €\"", "\"250,00 €\"", "\"1 775,00 €\""));
-
-        int rowIndex = 29;
-        for (List<String> expectedList : expected) {
-            List<String> actualList = cellMap.get(rowIndex++);
-            assertEquals(expectedList.size(), actualList.size(), "row size mismatch in row " + rowIndex + "\n\t" + expectedList + "\n\t" + actualList);
-            for (int i = 0; i < expectedList.size(); i++) {
-                String expectedValue = expectedList.get(i);
-                String actualValue = actualList.get(i);
-                assertEquals(expectedValue, actualValue, "mismatch in row " + rowIndex + " at column " + (i + 1) + "\n\t" + expectedList + "\n\t" + actualList);
-            }
-        }
-    }
-
 }

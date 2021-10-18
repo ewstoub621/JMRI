@@ -16,7 +16,7 @@ public class TrainRevenueParametersFrame extends OperationsFrame {
         super.initComponents();
 
         // build menu
-        addHelpMenu("package.jmri.jmrit.operations.Operations_TrainRevenueParameters", true); // NOI18N
+        addHelpMenu("package.jmri.jmrit.operations.Operations_EditRevenueParameters", true); // NOI18N
 
         initMinimumSize();
     }

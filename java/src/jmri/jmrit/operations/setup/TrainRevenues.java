@@ -30,7 +30,7 @@ public class TrainRevenues implements Serializable {
     private final Set<String> carKeysInDemur = new TreeSet<>();
     private final Set<String> carKeysInMulctSet = new TreeSet<>();
     private transient Train train;
-    private Map<String, String[]> origRouteIdsByCarKey;
+    private Map<String, String[]> origTrackIds;
     private BigDecimal maxRouteTransportFee = BigDecimal.ZERO;
 
     public static String getCustomer(Car car) {
@@ -56,8 +56,7 @@ public class TrainRevenues implements Serializable {
 
     public static TrainRevenues getTrainRevenues(Train train) {
         TrainRevenues trainRevenues = null;
-        File file = InstanceManager.getDefault(TrainManagerXml.class)
-                .getTrainRevenuesSerFile(train);
+        File file = getTrainRevenuesSerFile(train);
         if (file.exists()) {
             InputStream isFile, buffer;
             ObjectInput input;
@@ -83,13 +82,27 @@ public class TrainRevenues implements Serializable {
         return trainRevenues;
     }
 
+    public static File getTrainRevenuesCsvFile(Train train) throws IOException {
+        new TrainCsvRevenue(train);
+
+        File file = InstanceManager.getDefault(TrainManagerXml.class)
+                .getTrainCsvRevenueFile(train);
+        if (!file.exists()) {
+            return null;
+        }
+        return file;
+    }
+
+    public static File getTrainRevenuesSerFile(Train train) {
+        return InstanceManager.getDefault(TrainManagerXml.class).getTrainRevenuesSerFile(train);
+    }
+
     public TrainRevenues(Train train) {
         this.train = train;
     }
 
     public void deleteTrainRevenuesSerFile(Train train) {
-        File trainRevenuesSerFile = InstanceManager.getDefault(TrainManagerXml.class)
-                .getTrainRevenuesSerFile(train);
+        File trainRevenuesSerFile = getTrainRevenuesSerFile(train);
         if (trainRevenuesSerFile.exists()) {
             trainRevenuesSerFile.delete();
         }
@@ -103,8 +116,8 @@ public class TrainRevenues implements Serializable {
         return spurCapacityByCustomer;
     }
 
-    public Map<String, String[]> getOrigRouteIdsByCarKey() {
-        return origRouteIdsByCarKey;
+    public Map<String, String[]> getOrigTrackIds() {
+        return origTrackIds;
     }
 
     public Collection<CarRevenue> getCarRevenues() {
@@ -125,26 +138,15 @@ public class TrainRevenues implements Serializable {
         return map;
     }
 
-    public File getCsvRevenueFile(Train train) throws IOException {
-        new TrainCsvRevenue(train);
-        // validate file creation
-        File file = InstanceManager.getDefault(TrainManagerXml.class)
-                .getTrainCsvRevenueFile(train);
-        if (!file.exists()) {
-            return null;
-        }
-        return file;
-    }
-
-    public void loadOrigRouteIds() {
-        origRouteIdsByCarKey = new HashMap<>();
+    public void loadOrigTrackIds() {
+        origTrackIds = new HashMap<>();
         for (Car car : InstanceManager.getDefault(CarManager.class)
                 .getList(train)) {
             if (!car.isCaboose() && !car.isPassenger()) {
                 String[] ids = new String[2];
-                ids[ORIG] = car.getRouteLocationId();
-                ids[DEST] = car.getRouteDestinationId();
-                origRouteIdsByCarKey.put(car.toString(), ids);
+                ids[ORIG] = car.getTrackId();
+                ids[DEST] = car.getDestinationTrackId();
+                origTrackIds.put(car.toString(), ids);
             }
         }
         saveTrainRevenuesSerFile(this);
@@ -399,10 +401,10 @@ public class TrainRevenues implements Serializable {
             if (!trainCar.isCaboose() && !trainCar.isPassenger() && !carKeyInMulctSet) {
                 String carCustomer = getCustomer(trainCar);
                 //
-                String[] ids = origRouteIdsByCarKey.get(carKey);
+                String[] ids = origTrackIds.get(carKey);
                 if (ids != null) {
-                    String origRouteDestinationId = ids[DEST];
-                    if (RollingStock.NONE.equals(origRouteDestinationId)) {
+                    String origDestinationTrackId = ids[DEST];
+                    if (RollingStock.NONE.equals(origDestinationTrackId)) {
                         changed = true;
 
                         carKeysInMulctSet.add(carKey);
@@ -433,7 +435,7 @@ public class TrainRevenues implements Serializable {
 
                             carRevenue.setCancellationMulct(
                                     BigDecimal.valueOf(Integer.parseInt(Setup.getCancelMulct())));
-                        } else if (!origRouteDestinationId.equals(trainCar.getRouteDestinationId())) {
+                        } else if (!origDestinationTrackId.equals(trainCar.getDestinationTrackId())) {
                             changed = true;
 
                             carKeysInMulctSet.add(carKey);

@@ -400,15 +400,15 @@
     <h3>Operations</h3>
         <a id="Operations" name="Operations"></a>
         <ul>
-            <li>A new feature has been created to calculate train revenue from pickup and set-out actions of a
+            <li>A new feature has been created to calculate train revenue from all pick-up and set out actions of a
               train along its route. A train revenue report is produced as a .csv file by selecting the "Save Train
-              Revenues" checkbox after opening the Operations-&gt;Settings-&gt;Tools-&gt;Options panel. Most of the
-              parameters used to calculate train revenue are can be set via the "Edit Revenue Parameters" button in
-              that same panel. Transport charges from route location to location can be set in the
-              <a href="#EditRoute">Edit Route</a> panel in the "Fee" column. A <i>.ser</i> file is used once a train is
-              built to save and restore revenue data if the DecoderPro app is shut down and restarted before a train
-              moves or is terminated. Changes en route, i.e. if the Conductor or Yard Master modifies train actions
-              from the original build schedule, are also captured.
+              Revenues" checkbox after opening the Operations-&gt;Settings-&gt;Tools-&gt;Options panel, building a
+              train and finally terminating it. Most of the parameters used to calculate train revenue are can be set
+              via the "Edit Revenue Parameters" button in that same panel. Transport charges from route location to
+              location can be set in the <a href="#EditRoute">Edit Route</a> panel in the "Fee" column. A <i>.ser</i>
+              file is used once a train is built to save and restore revenue data if the DecoderPro app is shut down
+              and restarted before a train moves or is terminated. Changes en route, i.e. if the Conductor or Yard
+              Master modifies train actions from the original build schedule, are also captured.
             </li>
         </ul>
 

@@ -27,10 +27,10 @@ public class TrainCsvRevenue extends TrainCsvCommon {
     private static final int SWITCHING = 0;
     private static final int TRANSPORT = 1;
     private static final int HAZARDFEE = 2;
-    private static final int DISCOUNTS = 3;
-    private static final int DEMURRAGE = 4;
-    private static final int CANCELLED = 5;
-    private static final int DIVERSION = 6;
+    private static final int DEMURRAGE = 3;
+    private static final int CANCELLED = 4;
+    private static final int DIVERSION = 5;
+    private static final int DISCOUNTS = 6;
     private static final int TOTAL_COL = 7;
 
     private static final String RP = "RP";
@@ -62,7 +62,7 @@ public class TrainCsvRevenue extends TrainCsvCommon {
 
     private BigDecimal calcDiscount(BigDecimal[] carValues, BigDecimal discountRate) {
         BigDecimal discount = BigDecimal.ZERO;
-        for (int i = SWITCHING; i < DISCOUNTS; i++) {
+        for (int i = SWITCHING; i < DEMURRAGE; i++) {
             discount = discount.add(carValues[i]);
         }
 
@@ -185,10 +185,10 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         carCharges[SWITCHING] = carRevenue.getSwitchingCharges();
         carCharges[TRANSPORT] = carRevenue.getTransportCharges();
         carCharges[HAZARDFEE] = carRevenue.getHazardFeeCharges();
-        carCharges[DISCOUNTS] = calcDiscount(carCharges, discountRate);
         carCharges[DEMURRAGE] = carRevenue.getDemurrageCharges();
         carCharges[CANCELLED] = carRevenue.getCancellationMulct();
         carCharges[DIVERSION] = carRevenue.getDiversionMulct();
+        carCharges[DISCOUNTS] = calcDiscount(carCharges, discountRate);
         carCharges[TOTAL_COL] = calcBigDecimalTotal(carCharges);
 
         return carCharges;
@@ -244,8 +244,10 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         fileOut.printRecord(RP, " - " + Setup.getMessage("AddedHazardFee"), getCurrencyString(Setup.getHazardFee()));
     }
 
-    private void printRevenueDetailByCarValues(CSVPrinter fileOut) throws IOException {
+    private void printRevenueDetailByCarValues(CSVPrinter fileOut, String col2, String col3) throws IOException {
+        printRevenueDetailSubHeader(fileOut, col2, col3);
         for (Map.Entry<String, Set<CarRevenue>> e : carRevenuesByCustomer.entrySet()) {
+
             String customer = e.getKey();
             BigDecimal discountRate = customerDiscountRateMap.get(customer);
             if (discountRate == null) {
@@ -256,6 +258,7 @@ public class TrainCsvRevenue extends TrainCsvCommon {
             for (CarRevenue carRevenue : e.getValue()) {
                 printMap.put(getCarDescription(carRevenue), carRevenue);
             }
+
             for (Map.Entry<String, CarRevenue> kv : printMap.entrySet()) {
                 String description = kv.getKey();
                 CarRevenue carRevenue = kv.getValue();
@@ -266,9 +269,18 @@ public class TrainCsvRevenue extends TrainCsvCommon {
                 fileOut.println();
             }
         }
+        fileOut.println();
     }
 
-    private void printRevenueDetailByCustomerValues(CSVPrinter fileOut) throws IOException {
+    private void printRevenueDetailSubHeader(CSVPrinter fileOut, String col2, String col3) throws IOException {
+        fileOut.print("REV");
+        fileOut.print(Setup.getMessage(col2));
+        fileOut.print(Setup.getMessage(col3));
+        fileOut.println();
+    }
+
+    private void printRevenueDetailByCustomerValues(CSVPrinter fileOut, String col2, String col3) throws IOException {
+        printRevenueDetailSubHeader(fileOut, col2, col3);
         for (Map.Entry<String, Set<CarRevenue>> e : carRevenuesByCustomer.entrySet()) {
             String customerName = e.getKey();
             BigDecimal customerDiscountRate = customerDiscountRateMap.get(customerName);
@@ -289,9 +301,12 @@ public class TrainCsvRevenue extends TrainCsvCommon {
 
             addBigDecimalValues(revenueValues, customerCharges);
         }
+        fileOut.println();
     }
 
-    private void printRevenueDetailForTrainValues(CSVPrinter fileOut) throws IOException {
+    private void printRevenueDetailForTrainValues(CSVPrinter fileOut, String col2, String col3) throws IOException {
+        printRevenueDetailSubHeader(fileOut, col2, col3);
+
         fileOut.print(RDR);
         fileOut.print(train.getDescription());
         fileOut.print(getCurrencyString(trainRevenues.getMaxRouteTransportFee()));
@@ -299,34 +314,32 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         fileOut.println();
     }
 
-    private void printRevenueDetailHeader(CSVPrinter fileOut, String col2, String[] col3) throws IOException {
+    private void printRevenueDetailHeader(CSVPrinter fileOut) throws IOException {
         fileOut.println();
-        fileOut.print(REV);
-        fileOut.print(Setup.getMessage(col2));
-        fileOut.print(Setup.getMessage(col3[0]));
+        fileOut.print(NONE);
+        fileOut.print(NONE);
+        fileOut.print(NONE);
         fileOut.print(Setup.getMessage("Switching"));
         fileOut.print(Setup.getMessage("Transport"));
         fileOut.print(Setup.getMessage("Hazard"));
-        fileOut.print(Setup.getMessage("Customer"));
         fileOut.print(Setup.getMessage("Demurrage"));
         fileOut.print(Setup.getMessage("Cancelled"));
         fileOut.print(Setup.getMessage("Diverted"));
+        fileOut.print(Setup.getMessage("Customer"));
         fileOut.print(Setup.getMessage("Total"));
         fileOut.println();
+
         fileOut.print(NONE);
         fileOut.print(NONE);
-        fileOut.print(Setup.getMessage(col3[1]));
+        fileOut.print(NONE);
         fileOut.print(Setup.getMessage("Tariff"));
         fileOut.print(Setup.getMessage("Tariff"));
-        fileOut.print(Setup.getMessage("Fee"));
+        fileOut.print(Setup.getMessage("Tariff"));
+        fileOut.print(Setup.getMessage("Charge"));
+        fileOut.print(Setup.getMessage("Mulct"));
+        fileOut.print(Setup.getMessage("Mulct"));
         fileOut.print(Setup.getMessage("Discount"));
-        fileOut.print(Setup.getMessage("Fee"));
-        fileOut.print(Setup.getMessage("Mulct"));
-        fileOut.print(Setup.getMessage("Mulct"));
         fileOut.print(Setup.getMessage("Revenue"));
-        fileOut.print(NONE);
-        fileOut.print(NONE);
-        fileOut.print(NONE);
         fileOut.println();
     }
 
@@ -365,14 +378,10 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         printHeaderBlock(fileOut);
         printParameterBlock(fileOut);
 
-        printRevenueDetailHeader(fileOut, "ByCar", new String[]{"For", "Customer"});
-        printRevenueDetailByCarValues(fileOut);
-
-        printRevenueDetailHeader(fileOut, "ByCustomer", new String[]{"Discount", "Rate"});
-        printRevenueDetailByCustomerValues(fileOut);
-
-        printRevenueDetailHeader(fileOut, "ByTrain", new String[]{"Route", "Rate"});
-        printRevenueDetailForTrainValues(fileOut);
+        printRevenueDetailHeader(fileOut);
+        printRevenueDetailByCarValues(fileOut, "ByCar", "ForCustomer");
+        printRevenueDetailByCustomerValues(fileOut, "ByCustomer", "DiscountRate");
+        printRevenueDetailForTrainValues(fileOut, "ByTrain", "RouteRate");
 
         fileOut.flush();
     }

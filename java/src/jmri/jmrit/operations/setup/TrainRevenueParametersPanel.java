@@ -296,6 +296,8 @@ public class TrainRevenueParametersPanel extends OperationsPreferencesPanel impl
                 break;
             }
 
+            addItemLeft(revenueParamsPanel, new JLabel(" - " + Bundle.getMessage(fieldName)), 0, fieldRow);
+
             JTextField jtf = new JTextField(4);
             jtf.setHorizontalAlignment(JTextField.LEFT);
             jtf.setText(getSetupValue(fieldName));

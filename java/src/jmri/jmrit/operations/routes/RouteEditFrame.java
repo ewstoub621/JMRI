@@ -1,5 +1,15 @@
 package jmri.jmrit.operations.routes;
 
+import java.awt.Dimension;
+import java.awt.GridBagLayout;
+import java.text.MessageFormat;
+import java.util.List;
+
+import javax.swing.*;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import jmri.InstanceManager;
 import jmri.jmrit.operations.OperationsFrame;
 import jmri.jmrit.operations.OperationsXml;
@@ -14,13 +24,6 @@ import jmri.jmrit.operations.setup.Setup;
 import jmri.jmrit.operations.trains.Train;
 import jmri.swing.JTablePersistenceManager;
 import jmri.util.table.JTableWithColumnToolTips;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.swing.*;
-import java.awt.*;
-import java.text.MessageFormat;
-import java.util.List;
 
 /**
  * Frame for user edit of route

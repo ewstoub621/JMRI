@@ -124,7 +124,11 @@
                           <a href="#SaveTrainManifests">Save Train Manifests</a>
                         <li>
                           <a href="#SaveTrainRevenues">Save Train Revenues</a>
-                        </li>
+                          <ul>
+                            <li>
+                              <a href="#EditRevenueParameters">Train Revenue Parameters</a>
+                            </li>
+                          </ul>
                         </li>
 
                         <li>
@@ -1880,7 +1884,7 @@
      <p>
        When the <i>Save Train Revenues</i> option is selected, OperationsPro™ will track individual car movements in
        a train, accumulating the train's revenue data, for each freight car, in order to generate the train revenue
-       report upon completing all its moves (termination). The original schedule for freight car pick ups and set
+       report upon completing all its moves (termination). The original schedule for freight car pick-ups and set
        outs is created when the train is built. If the Conductor feature is used to move the train from location
        to location along the route, it becomes possible to modify that schedule, by cancelling scheduled pick up
        or set out actions for a car, picking up an unscheduled car from a location, or setting out a car at a different
@@ -1969,76 +1973,10 @@
 
       </table>
 
-   <a name="EditRevenueParameters" id="EditRevenueParameters"></a>
-     <h4>Edit Revenue Parameters</h4>
-     <p>
-       The <i>Edit Revenue Parameters</i> button brings up the <i>Revenue Parameters</i> panel.
-     </p>
-     <p><img src="images/EditRevenueParameters.png"></p>
-     <p>
-       This panel permits modifications of all the general revenue parameters for railroad operations, including
-       switching, handling, and demurrage fees, as well as cancellation and diversion mulcts, per freight car, plus a
-       maximum discount rate (in whole percentage units) provided for railroad customers. The currency values in this
-       panel are integer values of the currency for the locale your computer uses to run JMRI. In the US, these
-       would represent whole dollar amounts. In France, for instance, they would represent whole euros (symbol €); in
-       the UK, they would represent pounds sterling (symbol: £). It might be helpful to change these values to be
-       typical of currency values in your locale, region, and the era of your railroad, in order to produce more
-       suitable train revenues.
-     </p>
-      <h5>Demurrage</h5>
-        <p style = "margin-left: 25px">
-          <i>Demurrage</i> may be a new term for many. According to Merriam-Webster, it dates back to 1641, when it was
-          defined as the detention of a ship by the freighter beyond the time allowed for loading, unloading, or
-          sailing. The word was adapted from Old French "demeurer" - to linger or tarry. The English word "demur" comes
-          to mind. From the beginning, demurrage was considered a charge by the carrier to the owner of the port for
-          taking too much time to load or unload the vessel, thereby delaying the vessel's release to travel on to
-          its next destination. The application to railroading is straightforward. Demurrage has been a source of
-          railroad revenue from its very beginning. This term is still used today, as anyone who has been a railroad
-          customer for long can attest.
-        </p>
-        <p style = "margin-left: 25px">
-         The demurrage credit days value is the allowance given by the railroad for time to load or unload a car upon
-          delivery. The unit of value represents the count of passing trains servicing the spur, typically one per day
-          for Class III railroads. When a car is delivered to a spur, a wait time is assigned according to the spur
-          schedule (see <a href="#Schedules">Schedules</a>), if one exists. Otherwise, the wait time is zero and the
-          car is assumed to be loaded or unloaded, and therefore released for pickup before the next passing train.
-        </p>
-        <p style = "margin-left: 25px">
-          Each train that passes will decrement any remaining wait count for a waiting car until the wait count reaches
-          zero, at which point the car is assumed to have been (finally) loaded or unloaded and released for transport.
-          If the initial wait time, as specified by the spur's schedule, exceeds the credit limit, a demurrage fee
-          is applied as each servicing train passes, until the remaining wait value falls below the limit.
-        </p>
-        <p style = "margin-left: 25px">
-          For example, if a wait time of 4 were applied to a car, with a demurrage credit days value is 2, then a
-          single demurrage charge would be applied as revenue for the next 2 passing trains. The car would then be
-          released for pickup by the 4th passing train.
-         </p>
-      <p>
-        The only other parameter affecting train revenue is the route fee (see <a href= "#EditRoute">Edit Route</a>).
-        The "Fee" value is the charge to transport any freight car from each location to the next along the train's
-        route.
-     </p>
-      <p>
-        Below is the sample result from a test case for the train revenue code (using the US locale). This image was
-        rendered by the Numbers app on macOS. The CSV file name (above the table) includes the train name, plus the
-        date and time the train was built. The representation of currency is in dollars and cents, as this was
-        created with the US locale setting.
-      <p><img src="images/TrainRevenueCSVfromTestCase.png">
-      <p>
-      If the computer running JMRI were set for another locale, the currency would be expressed appropriately. For
-      instance, if running in the FR locale (using the French language in France), the train's <i>Le total Revenu</i>
-      value, for "Train SFF", would be seen as "1 775,00 €" (euros):
-    </p>
-      <p><img src="images/TrainRevenueCSVfromTestCaseFR.png">
-
-   <a name="EnableValueFields" id="EnableValueFields"></a>
-   <h4>Enable Value Fields</h4>
-   You can use the value field to enter the value or cost of your rolling stock. You can rename the
-   value field if you wish and use it for other purposes.
-
-   <a name="EnableIdentificationTagFields" id="EnableIdentificationTagFields"></a>
-   <h4>Enable Identification Tag Fields</h4>
+      <h4 id="EnableValueFields">Enable Value Fields</h4>
+      You can use the value field to enter the value or cost of your rolling stock. You can rename
+      the value field if you wish and use it for other purposes.
+      <h4 id="EnableIdentificationTagFields">Enable Identification Tag Fields</h4>
       You can enable the assignment of reporters and tags for your locations and rolling stock.
       Reporters can be assigned to locations and tracks. When this option is enabled, the Cars and
       Locomotives windows will display the last location and time the rolling stock was detected.
@@ -2317,7 +2255,7 @@
       A new window should appear. To edit an existing location, press the "Edit" button for the
       location.</p>
 
-      <p><img src="images/EditRoute.png" alt="">
+      <p><img src="images/EditLocation.png" alt="">
       </p>
 
       <p>In the "Add Location" window, enter the name of the location in the field labeled "Name".
@@ -4211,15 +4149,13 @@
       for that segment when using the train <a href="#TrainRequires">Auto</a> locomotive assignment
       feature. Enter the maximum grade that the train will encounter between the two locations.</p>
 
-      <p>
-        The Fee value is only used if you want to generate train revenue reports (see <a href="#BuildOptions">Build
-        Options</a>). This value is used to charge a customer for hauling a freight car between each location
+      <p>The Fee value is only used if you want to generate train revenue reports (see <a href="#BuildOptions">
+        Build Options</a>). This value is used to charge a customer for hauling a freight car between each location
         and the next along the route for this train. Each move of the train adds that respective transport
         fee to the train revenue for each car in the train for that segment of the route, charged to the customer
         shipping or receiving the rail car. It would be appropriate to charge more for longer hauls or against higher
         grades. The default values can be edited and will be saved by pressing the "Save Route" button on the Edit Route
-        panel.
-      </p>
+        panel.</p>
 
       <p>The X and Y are the coordinates on your dispatcher's panel for the optional <a href=
       "#PanelOptionsTrainIcons">train icon.</a> You can set the coordinates directly in the table
@@ -4971,12 +4907,10 @@
       appear. Pressing the set car "Save" button will ask you if you really want to remove the car
       from the train.</p>
 
-      <p>
-        If you have selected the <i>Save Train Revenues</i> checkbox, any of the above actions to add or remove a
-        freight car, or modify the pick-up or set-out locations of a freight car, will incur a <i>Mulct</i> charge to
-        the customer, specified via the "Edit Revenue Parameters" button in the <a href="#SettingsOptions"> Option
-      </a> window.
-      </p>
+      <p>If you have selected the <i>Save Train Revenues</i> checkbox, any of the above actions to add or remove a
+      freight car, or modify the pick-up or set-out locations of a freight car, will incur a <i>Mulct</i> charge to
+      the customer, specified via the "Edit Revenue Parameters" button in the <a href="#SettingsOptions"> Option
+      </a> window.</p>
 
       <h3 id="TrainsTools">Trains Tools</h3>
       <img src="images/TrainsPaneMenu.png" alt="Operations Trains window Tools Menu">
@@ -5275,44 +5209,158 @@
       <h4 id="TrainScripts">Train Scripts</h4>
       You can run a script when starting and / or shutting down OperationsPro. Use the "Add Script"
       buttons to select the scripts you want to run.
-      <a name="TrainRevenueParameters" id="TrainRevenueParameters"></a>
+
+      <a name="EditRevenueParameters" id="EditRevenueParameters"></a>
       <h4>Train Revenue Parameters</h4>
       <p>
-        Train revenue parameter values represent the tariffs (fees) and mulcts (penalties) which can be charged to
-        railroad customers for freight services, as well as the maximum discount for services granted to each
-        customer. The discount it in proportion to their spur-track capacity. Railroad customers are named according to
-        the names of the spurs, at which cars are loaded or unloaded, and which are used for freight car set-outs and
-        pick-ups.
+        The <i>Edit Revenue Parameters</i> button brings up the <i>Edit Revenue Parameters</i> panel.
+      </p>
+      <p><img src="images/EditRevenueParameters.png"></p>
+      <p>
+        These train revenue parameter values represent editable tariff, penalty, and demurrage values, which are
+        used to charge railroad customers for actual freight services. It also includes the maximum discount rate for
+        tariffs that can be granted to each customer. The values you change are saved for your railroad when you
+        press the "Save" button.
+      </p>
+      <p>The currency values in this panel are integer values for the currency of the locale your computer uses to run
+        JMRI. In the US, these would represent whole dollar amounts. In France, they would represent whole euros
+        (symbol €); in the UK, they would represent whole pounds sterling (symbol: £). It might be helpful to change
+        these values to be typical of currency values in your locale, region, and the era of your railroad, in order to
+        produce more suitable train revenues. The default values provided have been gleaned from contemporary railroad
+        tariff data in the US.
+      </p>
+      <p>
+        Note: railroad <i>customers</i> are named according to the names of spurs at which freight cars are loaded or
+        unloaded and where they may be set out or picked up by a passing train.
       <dl>
-        <dt>Switching</dt>
-        <dd>This charge is in accordance to the freight car load, either empty or by the specific type of load being
-          handled.</dd>
-        <dt>Hazard Fee</dt>
-        <dd>A car marked as Hazardous will be charged an additional hazard fee if loaded.</dd>
+        <dt>Switching Tariff</dt>
+        <dd>
+          This charge is in accordance to the freight car load, either empty or by the type of load being handled.
+          <br><br>
+        </dd>
+      <dt>Hazard Tariff</dt>
+        <dd>
+          A car marked as Hazardous will be charged an additional hazard fee if loaded.
+          <br><br>
+        </dd>
         <dt>Mulct</dt>
-        <dd>This is the penalty charged for either cancelling the scheduled pick-up or set-out of a freight car, or
+        <dd>
+          This is the penalty charged for either cancelling the scheduled pick-up or set-out of a freight car, or
           diverting a freight car from its original destination, once the train has embarked on its route. Mulct can be
           triggered via the Train Conductor window (available by the "Train Conductor" menu item in the Edit Train
           window, or the "Conductor" Action button in the Trains window table) as follows: at each location along the
           route, the conductor can add or remove cars from the train, or change their destinations using the Modify
-          button, before pressing the "Move" button.</dd>
+          button, before pressing the "Move" button.
+          <br><br>
+        </dd>
         <dt>Demurrage</dt>
-        <dd>This is the fee charged for delayed loading or unloading a freight car. A distinction is made between
+        <dd>
+          This is the amount charged for delayed loading or unloading a freight car. A distinction is made between
           railroad-owned and customer-owned rail cars, the latter designated by a final "X" in the freight car road
-          name. Demurrage is charged each time a train, which could otherwise service the car, passes by the car because
-          it is held (waiting, i.e. demurring) on a spur longer than the credit limit granted by the railroad.</dd>
+          name.
+          <br><br>
+          <i>Demurrage</i> (/dəˈmərij/) may be a new term for many. According to Merriam-Webster, it dates back to
+          1641, when it was defined as the detention of a ship by the freighter beyond the time allowed for loading,
+          unloading, or sailing. The word was adapted from Old French "demeurer" - to linger or tarry. The English
+          word "demur" comes to mind. From the beginning, demurrage was considered a charge by the carrier to the
+          owner of the port for taking too much time to load or unload the vessel, thereby delaying the vessel's
+          release to travel on to its next destination. The application to railroading is straightforward. Demurrage
+          has been a source of railroad revenue from its very beginning. This term is still used today, as anyone who
+          has been a railroad customer for long can attest.
+          <br><br>
+          The demurrage credit days value is the allowance given by the railroad for time to load or unload a car upon
+          delivery. The unit of value represents the count of passing trains servicing the spur, typically one per day
+          for Class III railroads. When a car is delivered to a spur, a wait time is assigned according to the spur
+          schedule (see <a href="#Schedules">Schedules</a>), if one exists. Otherwise, the wait time is zero and the
+          car is assumed to be loaded or unloaded, and thereby released for pickup before the next passing train.
+          <br><br>
+          Each train that passes will decrement any remaining wait count for a waiting car until the wait count reaches
+          zero, at which point the car is assumed to have been (finally) loaded or unloaded and released for transport.
+          If the initial wait time, as specified by the spur's schedule, exceeds the credit limit, a demurrage fee
+          is applied as each servicing train passes, until the remaining wait value falls below the limit.
+          <br><br>
+          For example, if a wait time of 4 were applied to a car, with a demurrage credit days value is 2, then a
+          single demurrage charge would be applied as revenue for the next 2 passing trains. The car would then be
+          released for pickup by the 4th passing train.
+          <br><br>
+        </dd>
+        <dt>Maximum Discount</dt>
+        <dd>
+          A customer's discount is proportional to its total spur-track capacity, with the customer having the
+          largest capacity being awarded the maximum discount. Discounts are applied to switching, transport, and
+          hazard tariffs, not to demurrage charges or mulct penalties.
+        </dd>
       </dl>
+      <p>
+        There are also charges for transport, i.e. hauling freight cars between locations along the route of the
+        train. These charges can be found and edited by pressing the "Edit" button for a location in the
+        <a href="#Routes">Routes</a> window. The value in the column labeled <i>Fee</i> is the charge to haul a car
+        from one location to the next along the route. Each move of the train adds that respective transport fee to
+        the train revenue for each car in the train for that segment of the route, charged to the customer shipping
+        or receiving the rail car. It would be appropriate to charge more for longer hauls or against higher grades.
+        The default values can be edited and will be saved by pressing the "Save Route" button on the Edit Route panel.
       </p>
       <p>
-        There is also al charge for transport, i.e. hauling freight cars between locations along the route of the
-        train. These charges can be found and edited by pressing the "Edit" button for a location in the <a
-              href="#Routes">Routes</a> window. The value in the column labeled <i>Fee</i> is the charge to haul a car
-        from one location to the next along the route. Each move of the train adds that respective
-        transport fee to the train revenue for each car in the train for that segment of the route, charged to the
-        customer shipping or receiving the rail car. It would be appropriate to charge more for longer hauls or
-        against higher grades. The default values can be edited and will be saved by pressing the "Save Route" button
-        on the Edit Route panel.
+        Below is the sample result from a test case for the train revenue code (using the US locale). This image was
+        rendered by the Numbers app on macOS. The CSV file name (above the table) includes the train name, plus the
+        date and time the train was built. The representation of currency is in dollars and cents, as this was
+        created with the US locale setting.
+      <p><img src="images/TrainRevenueCSVfromTestCase.png">
+      <p>
+        If the computer running JMRI were set for another locale, the currency would be expressed appropriately. For
+        instance, if running in the FR locale (using the French language in France), the train's <i>Le total Revenu</i>
+        value, for "Train CP 3", would be seen as "2 685,00 €" (euros):
       </p>
+      <p><img src="images/TrainRevenueCSVfromTestCaseFR.png">
+      <p>
+        Support for locales in OperationsPro™ includes the following language code and country pairs:
+      <table>
+        <tr>
+          <th>Country</th>
+          <th>Language Code</th>
+          <th>Country Code</th>
+        </tr>
+      <tr>
+        <td>Denmark</td>
+        <td>da</td>
+        <td>DK</td>
+      </tr>
+      <tr>
+        <td>France</td>
+        <td>fr</td>
+        <td>FR</td>
+      </tr>
+      <tr>
+        <td>Germany</td>
+        <td>de</td>
+        <td>DE</td>
+      </tr>
+      <tr>
+        <td>Italy</td>
+        <td>it</td>
+        <td>IT</td>
+      </tr>
+      <tr>
+        <td>Japan</td>
+        <td>ja</td>
+        <td>JP</td>
+      </tr>
+      <tr>
+        <td>Netherlands</td>
+        <td>nl</td>
+        <td>NL</td>
+      </tr>
+      <tr>
+        <td>UK</td>
+        <td>en</td>
+        <td>GB</td>
+      </tr>
+      <tr>
+        <td>US</td>
+        <td>en</td>
+        <td>US</td>
+      </tr>
+    </table>
 
       <h4 id="PrintSavedTrainManifests">Print or Preview Saved Train Manifests</h4>
 

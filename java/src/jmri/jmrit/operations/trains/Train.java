@@ -2849,7 +2849,7 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         if (Setup.isSaveTrainRevenuesEnabled()) {
             TrainRevenues trainRevenues = getTrainRevenues();
             trainRevenues.deleteTrainRevenuesSerFile(this);
-            trainRevenues.loadOrigRouteIds();
+            trainRevenues.loadOrigTrackIds();
         }
         return results;
     }
@@ -3134,7 +3134,7 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         setDirtyAndFirePropertyChange(TRAIN_MOVE_COMPLETE_CHANGED_PROPERTY, rl, rlNext);
         if (!this.isBuilt() && Setup.isSaveTrainRevenuesEnabled()) {
             try {
-                getTrainRevenues().getCsvRevenueFile(this);
+                TrainRevenues.getTrainRevenuesCsvFile(this);
             } catch (IOException e) {
                 e.printStackTrace();
             }
