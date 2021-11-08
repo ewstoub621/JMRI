@@ -37,7 +37,7 @@ public class TrainCsvRevenue extends TrainCsvCommon {
     private static final Object REV = "REV";
     private static final Object RDR = "RDR";
 
-    private final Map<String, Car> allCarsByCarKey = new HashMap<>();
+    private final Map<String, Car> allCarsByCarId = new HashMap<>();
     private Train train;
     private Map<String, BigDecimal> customerDiscountRateMap;
     private Map<String, Set<CarRevenue>> carRevenuesByCustomer;
@@ -51,7 +51,7 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         }
         setup(train);
         writeCsvRevenueFile(train);
-        trainRevenues.deleteTrainRevenuesSerFile(train);
+        TrainRevenues.deleteTrainRevenuesSerFile(train);
     }
 
     private void addBigDecimalValues(BigDecimal[] customerValues, BigDecimal[] carValues) {
@@ -113,12 +113,12 @@ public class TrainCsvRevenue extends TrainCsvCommon {
     }
 
     private String getCarDescription(CarRevenue carRevenue) {
-        Car car = allCarsByCarKey.get(carRevenue.getCarKey());
+        Car car = allCarsByCarId.get(carRevenue.getCarId());
         if (carRevenue.getLoadName() == null) {
             carRevenue.setLoadName(car.getLoadName());
         }
 
-        return String.format("%-" + getNoAction().length() + "s : (%s) %-5s %-7s - %s",
+        return String.format("%-" + getNoAction().length() + "s : (%-5s) %-5s %-7s - %s",
                 getActionString(carRevenue),
                 carRevenue.getLoadName(),
                 car.getRoadName(),
@@ -130,11 +130,10 @@ public class TrainCsvRevenue extends TrainCsvCommon {
     private Map<String, BigDecimal> getCustomerDiscountRateMap() {
         int maxCapacity = 1;
         Map<String, Integer> customerCapacityMap = new HashMap<>();
-        for (Map.Entry<String, Map<String, Integer>> e : trainRevenues.getSpurCapacityByCustomer().entrySet()) {
+        for (Map.Entry<String, Map<String, Integer>> e : trainRevenues.getSpurCapacityMapByCustomer().entrySet()) {
             String customer = e.getKey();
             int customerCapacity = 0;
-            Map<String, Integer> trackIdLengthMap = e.getValue();
-            for (Integer spurLength : trackIdLengthMap.values()) {
+            for (Integer spurLength : e.getValue().values()) {
                 customerCapacity += spurLength;
             }
             customerCapacityMap.put(customer, customerCapacity);
@@ -146,13 +145,12 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         BigDecimal multiplicand = numerator.divide(denominator, MathContext.DECIMAL128);
 
         Map<String, BigDecimal> customerDiscountRateMap = new HashMap<>();
-        for (CarRevenue carRevenue : trainRevenues.getCarRevenues()) {
-            String customer = carRevenue.getCustomerName();
+        for (String customer : trainRevenues.getCarRevenueSetByCustomer().keySet()) {
             Integer capacity = customerCapacityMap.get(customer);
             if (capacity != null) {
                 BigDecimal spurCapacity = BigDecimal.valueOf(capacity);
                 BigDecimal value = multiplicand.multiply(spurCapacity);
-                customerDiscountRateMap.put(carRevenue.getCustomerName(), value);
+                customerDiscountRateMap.put(customer, value);
             }
         }
 
@@ -210,8 +208,7 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         printValidity(fileOut, getDate(true));
         // train comment can have multiple lines
         if (!train.getComment().equals(NONE)) {
-            String[] comments = train.getComment().split(NEW_LINE);
-            for (String comment : comments) {
+            for (String comment : train.getComment().split(NEW_LINE)) {
                 fileOut.printRecord("TC", Bundle.getMessage("csvTrainComment"), comment); // NOI18N
             }
         }
@@ -244,9 +241,9 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         fileOut.printRecord(RP, " - " + Setup.getMessage("AddedHazardFee"), getCurrencyString(Setup.getHazardFee()));
     }
 
-    private void printRevenueDetailByCarValues(CSVPrinter fileOut, String col2, String col3) throws IOException {
-        printRevenueDetailSubHeader(fileOut, col2, col3);
-        for (Map.Entry<String, Set<CarRevenue>> e : carRevenuesByCustomer.entrySet()) {
+    private void printRevenueDetailByCarValues(CSVPrinter fileOut) throws IOException {
+        printRevenueDetailSubHeader(fileOut, "ByCar", "ForCustomer");
+        for (Map.Entry<String, Set<CarRevenue>> e : trainRevenues.getCarRevenueSetByCustomer().entrySet()) {
 
             String customer = e.getKey();
             BigDecimal discountRate = customerDiscountRateMap.get(customer);
@@ -279,8 +276,8 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         fileOut.println();
     }
 
-    private void printRevenueDetailByCustomerValues(CSVPrinter fileOut, String col2, String col3) throws IOException {
-        printRevenueDetailSubHeader(fileOut, col2, col3);
+    private void printRevenueDetailByCustomerValues(CSVPrinter fileOut) throws IOException {
+        printRevenueDetailSubHeader(fileOut, "ByCustomer", "DiscountRate");
         for (Map.Entry<String, Set<CarRevenue>> e : carRevenuesByCustomer.entrySet()) {
             String customerName = e.getKey();
             BigDecimal customerDiscountRate = customerDiscountRateMap.get(customerName);
@@ -304,8 +301,8 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         fileOut.println();
     }
 
-    private void printRevenueDetailForTrainValues(CSVPrinter fileOut, String col2, String col3) throws IOException {
-        printRevenueDetailSubHeader(fileOut, col2, col3);
+    private void printRevenueDetailForTrainValues(CSVPrinter fileOut) throws IOException {
+        printRevenueDetailSubHeader(fileOut, "ByTrain", "RouteRate");
 
         fileOut.print(RDR);
         fileOut.print(train.getDescription());
@@ -361,10 +358,10 @@ public class TrainCsvRevenue extends TrainCsvCommon {
     private void setup(Train train) {
         this.train = train;
         trainRevenues = train.getTrainRevenues();
-        carRevenuesByCustomer = trainRevenues.getCarRevenuesByCustomer();
+        carRevenuesByCustomer = trainRevenues.getCarRevenueSetByCustomer();
         customerDiscountRateMap = getCustomerDiscountRateMap();
         for (Car car : new HashSet<>(InstanceManager.getDefault(CarManager.class).getList())) {
-            allCarsByCarKey.put(car.toString(), car);
+            allCarsByCarId.put(car.getId(), car);
         }
         revenueValues = loadBigDecimalZeroValues();
         if (Locale.ENGLISH.equals(Locale.getDefault())) {
@@ -379,9 +376,9 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         printParameterBlock(fileOut);
 
         printRevenueDetailHeader(fileOut);
-        printRevenueDetailByCarValues(fileOut, "ByCar", "ForCustomer");
-        printRevenueDetailByCustomerValues(fileOut, "ByCustomer", "DiscountRate");
-        printRevenueDetailForTrainValues(fileOut, "ByTrain", "RouteRate");
+        printRevenueDetailByCarValues(fileOut);
+        printRevenueDetailByCustomerValues(fileOut);
+        printRevenueDetailForTrainValues(fileOut);
 
         fileOut.flush();
     }

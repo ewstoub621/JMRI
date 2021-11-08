@@ -2,6 +2,7 @@ package jmri.jmrit.operations.setup;
 
 import jmri.InstanceManager;
 import jmri.jmrit.operations.locations.Location;
+import jmri.jmrit.operations.locations.LocationManager;
 import jmri.jmrit.operations.locations.Track;
 import jmri.jmrit.operations.rollingstock.RollingStock;
 import jmri.jmrit.operations.rollingstock.cars.*;
@@ -14,6 +15,7 @@ import jmri.jmrit.operations.trains.TrainManagerXml;
 import java.io.*;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.function.Function;
 
 /**
  * TrainRevenues - a POJO for a train's CarRevenue POJOs and other supporting data
@@ -22,36 +24,37 @@ import java.util.*;
  */
 public class TrainRevenues implements Serializable {
     public static final int ORIG = 0;
-    public static final int DEST = 1;
+    public static final int TERM = 1;
     private static final long serialVersionUID = 4L;
 
-    private final Map<String, CarRevenue> carRevenuesByCarKey = new TreeMap<>();
-    private final Map<String, Map<String, Integer>> spurCapacityByCustomer = new HashMap<>();
-    private final Set<String> carKeysInDemur = new TreeSet<>();
-    private final Set<String> carKeysInMulctSet = new TreeSet<>();
+    private final Map<String, Map<String, CarRevenue>> carRevenueMapByCarId = new TreeMap<>();
+    private final Map<String, Map<String, Integer>> spurCapacityMapByCustomer = new HashMap<>();
+    private final Set<String> carIdsInDemur = new TreeSet<>();
+    private final Set<String> carIdsInMulctSet = new TreeSet<>();
     private transient Train train;
-    private Map<String, String[]> origTrackIds;
+    private Map<String, String[]> origTrackIdsByCarId;
     private BigDecimal maxRouteTransportFee = BigDecimal.ZERO;
 
+    public TrainRevenues(Train train) {
+        this.train = train;
+    }
+
     public static String getCustomer(Car car) {
-        if (car.getDestinationTrack() != null && car.getDestinationTrack().isSpur()) {
-            return TrainCommon.splitString(car.getDestinationTrack().getName());
+        if (car.getTrack() == null) {
+            if (car.getRouteLocation() == car.getRouteDestination() && car.getDestinationTrack() != null && car.getDestinationTrack().isSpur()) {
+                return TrainCommon.splitString(car.getDestinationTrack().getName());
+            }
+        } else {
+            if (car.getTrack().isSpur()) {
+                return TrainCommon.splitString(car.getTrack().getName());
+            }
         }
 
-        if (car.getTrack() != null && car.getTrack().isSpur()) {
-            return TrainCommon.splitString(car.getTrack().getName());
-        }
+        return null;
+    }
 
-        if (car.getDestinationTrack() != null) {
-            return TrainCommon.splitString(car.getDestinationTrack().getName());
-        }
-
-        if (car.getTrack() != null) {
-            return TrainCommon.splitString(car.getTrack().getName());
-        }
-
-        Train train = car.getTrain();
-        return (train.getLeadEngineRoadName() + " " + train.getCurrentLocationName()).trim();
+    public Train getTrain() {
+        return train;
     }
 
     public static TrainRevenues getTrainRevenues(Train train) {
@@ -85,8 +88,7 @@ public class TrainRevenues implements Serializable {
     public static File getTrainRevenuesCsvFile(Train train) throws IOException {
         new TrainCsvRevenue(train);
 
-        File file = InstanceManager.getDefault(TrainManagerXml.class)
-                .getTrainCsvRevenueFile(train);
+        File file = InstanceManager.getDefault(TrainManagerXml.class).getTrainCsvRevenueFile(train);
         if (!file.exists()) {
             return null;
         }
@@ -97,39 +99,46 @@ public class TrainRevenues implements Serializable {
         return InstanceManager.getDefault(TrainManagerXml.class).getTrainRevenuesSerFile(train);
     }
 
-    public TrainRevenues(Train train) {
-        this.train = train;
-    }
-
-    public void deleteTrainRevenuesSerFile(Train train) {
+    public static void deleteTrainRevenuesSerFile(Train train) {
         File trainRevenuesSerFile = getTrainRevenuesSerFile(train);
         if (trainRevenuesSerFile.exists()) {
             trainRevenuesSerFile.delete();
         }
     }
 
+    public static List<Car> sortCars(List<Car> cars) {
+        cars.sort(Comparator.comparing((Function<Car, String>) RollingStock::getRoadName).thenComparing(RollingStock::getNumber));
+
+        return cars;
+    }
+
     public BigDecimal getMaxRouteTransportFee() {
         return maxRouteTransportFee;
     }
 
-    public Map<String, Map<String, Integer>> getSpurCapacityByCustomer() {
-        return spurCapacityByCustomer;
+    public Map<String, Map<String, Integer>> getSpurCapacityMapByCustomer() {
+        return spurCapacityMapByCustomer;
     }
 
-    public Map<String, String[]> getOrigTrackIds() {
-        return origTrackIds;
+    public Map<String, String[]> getOrigTrackIdsByCarId() {
+        return origTrackIdsByCarId;
     }
 
     public Collection<CarRevenue> getCarRevenues() {
-        return carRevenuesByCarKey.values();
+        List<CarRevenue> carRevenues = new ArrayList<>();
+        carRevenueMapByCarId.forEach(
+                (key, value) -> value.forEach(
+                        (key1, value1) -> carRevenues.add(value1)));
+
+        return carRevenues;
     }
 
-    public Map<String, Set<CarRevenue>> getCarRevenuesByCustomer() {
+    public Map<String, Set<CarRevenue>> getCarRevenueSetByCustomer() {
         Map<String, Set<CarRevenue>> map = new TreeMap<>();
 
-        for (CarRevenue carRevenue : carRevenuesByCarKey.values()) {
+        for (CarRevenue carRevenue : getCarRevenues()) {
             String customer = carRevenue.getCustomerName();
-            if (!customer.trim().isEmpty()) {
+            if (customer != null && !customer.trim().isEmpty()) {
                 map.putIfAbsent(customer, new TreeSet<>());
                 map.get(customer).add(carRevenue);
             }
@@ -138,139 +147,115 @@ public class TrainRevenues implements Serializable {
         return map;
     }
 
-    public void loadOrigTrackIds() {
-        origTrackIds = new HashMap<>();
-        for (Car car : InstanceManager.getDefault(CarManager.class)
-                .getList(train)) {
+    public void loadOrigTrackIdsByCarId() {
+        origTrackIdsByCarId = new HashMap<>();
+        for (Car car : InstanceManager.getDefault(CarManager.class).getList(train)) {
             if (!car.isCaboose() && !car.isPassenger()) {
                 String[] ids = new String[2];
                 ids[ORIG] = car.getTrackId();
-                ids[DEST] = car.getDestinationTrackId();
-                origTrackIds.put(car.toString(), ids);
+                ids[TERM] = car.getDestinationTrackId();
+                origTrackIdsByCarId.put(car.getId(), ids);
             }
         }
-        saveTrainRevenuesSerFile(this);
+        saveTrainRevenuesSerFile();
     }
 
     public void setTrain(Train train) {
         this.train = train;
     }
 
-    public void updateCarRevenues(RouteLocation rl, RouteLocation rlNext) {
+    public void updateCarRevenues(RouteLocation rl) {
         if (rl == null) {
             return;
         }
         boolean spursChanges = updateSpurCapacity(rl);
         boolean demurChanges = updateDemurCharges(rl);
         boolean mulctChanges = updateMulctCharges();
-        boolean trainChanges = updateTrainCharges(rl, rlNext);
+        boolean trainChanges = updateTrainCharges(rl);
 
         if (rl != train.getTrainTerminatesRouteLocation()) {
             maxRouteTransportFee = maxRouteTransportFee.add(BigDecimal.valueOf(rl.getTransportFee()));
         }
 
         if (spursChanges || demurChanges || mulctChanges || trainChanges) {
-            saveTrainRevenuesSerFile(this);
+            saveTrainRevenuesSerFile();
         }
     }
 
-    private CarRevenue getCarRevenue(Car trainCar) {
-        String carKey = trainCar.toString();
-        String customer = getCustomer(trainCar);
-        CarRevenue carRevenue = carRevenuesByCarKey.get(carKey);
-        if (carRevenue == null) {
-            carRevenue = new CarRevenue(carKey, customer);
-            carRevenuesByCarKey.put(carKey, carRevenue);
+    private CarRevenue getCarRevenue(Car car) {
+        String carId = car.getId();
+        Map<String, CarRevenue> map = carRevenueMapByCarId.computeIfAbsent(carId, k -> new TreeMap<>());
+        String customer = getCustomer(car);
+        if (customer == null) {
+            return map.values().stream().filter(cr -> carId.equals(cr.getCarId())).findFirst().orElse(null);
+        } else {
+            return map.computeIfAbsent(customer, c -> new CarRevenue(carId, c, car.getLoadName()));
         }
-
-        return carRevenue;
     }
 
     private BigDecimal getSwitchingChargeByLoadAndType(Car car) {
         String loadName = car.getLoadName();
-        String defaultEmptyName = InstanceManager.getDefault(CarLoads.class)
-                .getDefaultEmptyName();
+        String defaultEmptyName = CarRevenue.getDefaultEmptyName();
         if (defaultEmptyName.equals(loadName)) {
             return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchEmpty()));
         }
 
         switch (car.getTypeName()) {
-        case "Boxcar":
-        case "XM": {
-            String lcLoadName = loadName.toLowerCase();
-            if (lcLoadName.contains("aggr") ||
-                    lcLoadName.contains("cmnt") ||
-                    lcLoadName.contains("coal") ||
-                    lcLoadName.contains("sand")) {
-                return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchAggrs()));
-            } else if (lcLoadName.contains("feed") ||
-                    lcLoadName.contains("grain") ||
-                    lcLoadName.contains("seed")) {
-                return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchGrain()));
-            } else if (lcLoadName.contains("coil") ||
-                    lcLoadName.contains("iron") ||
-                    lcLoadName.contains("metal") ||
-                    lcLoadName.contains("scrap") ||
-                    lcLoadName.contains("steel")) {
-                return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchMetal()));
-            } else if (lcLoadName.contains("paper") ||
-                    lcLoadName.contains("lumber") ||
-                    lcLoadName.contains("pulp") ||
-                    lcLoadName.contains("timber") ||
-                    lcLoadName.contains("wood")) {
-                return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchWoody()));
+            case "Boxcar":
+            case "XM": {
+                String lcLoadName = loadName.toLowerCase();
+                if (lcLoadName.contains("aggr") || lcLoadName.contains("cmnt") || lcLoadName.contains("coal") || lcLoadName.contains("sand")) {
+                    return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchAggrs()));
+                } else if (lcLoadName.contains("feed") || lcLoadName.contains("grain") || lcLoadName.contains("seed")) {
+                    return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchGrain()));
+                } else if (lcLoadName.contains("coil") || lcLoadName.contains("iron") || lcLoadName.contains("metal") || lcLoadName.contains("scrap") || lcLoadName.contains("steel")) {
+                    return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchMetal()));
+                } else if (lcLoadName.contains("paper") || lcLoadName.contains("lumber") || lcLoadName.contains("pulp") || lcLoadName.contains("timber") || lcLoadName.contains("wood")) {
+                    return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchWoody()));
+                } else {
+                    return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchLoads()));
+                }
             }
-        }
-
-        case "Coal":
-        case "HopCmnt":
-        case "HopCoal":
-        case "HopSand":
-        case "HopCoal-Ety":
-        case "HT":
-        case "HMR-cmnt":
-        case "HF-coal":
-        case "HMR-sand":
-        case "HF-coalEty":
-            return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchAggrs()));
-
-        case "HopGrain":
-        case "HMR-grain":
-            return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchGrain()));
-
-        case "Coilcar":
-        case "Gon-scrap":
-        case "FD-coil":
-        case "GB-scrap":
-            return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchMetal()));
-
-        case "FlatBHPaper":
-        case "FlatBHWood":
-        case "FlatTimber":
-        case "FlatWood":
-        case "FB-paper":
-        case "FB-wood":
-        case "FL":
-        case "FM-wood":
-            return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchWoody()));
-
-        case "Tank Oil":
-        case "TM-oil":
-            return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchTanks()));
-
-        default:
-            return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchLoads()));
+            case "Coal":
+            case "HopCmnt":
+            case "HopCoal":
+            case "HopSand":
+            case "HopCoal-Ety":
+            case "HT":
+            case "HMR-cmnt":
+            case "HF-coal":
+            case "HMR-sand":
+            case "HF-coalEty":
+                return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchAggrs()));
+            case "HopGrain":
+            case "HMR-grain":
+                return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchGrain()));
+            case "Coilcar":
+            case "Gon-scrap":
+            case "FD-coil":
+            case "GB-scrap":
+                return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchMetal()));
+            case "FlatBHPaper":
+            case "FlatBHWood":
+            case "FlatTimber":
+            case "FlatWood":
+            case "FB-paper":
+            case "FB-wood":
+            case "FL":
+            case "FM-wood":
+                return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchWoody()));
+            case "Tank Oil":
+            case "TM-oil":
+                return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchTanks()));
+            default:
+                return BigDecimal.valueOf(Integer.parseInt(Setup.getSwitchLoads()));
         }
     }
 
     private boolean isSpurPickUp(Car car, RouteLocation rl) {
-        if (car.getTrack() == null || !car.getTrack().isSpur()) {
+        if (car.getTrack() == null || !car.getTrack().isSpur() || !rl.getLocation().getTracksList().contains(car.getTrack())) {
             return false;
         }
-        if (!rl.getLocation().getTracksList().contains(car.getTrack())) {
-            return false;
-        }
-
         if (rl.getLocation().getId().equals(car.getLastLocationId())) {
             return true;
         }
@@ -286,8 +271,7 @@ public class TrainRevenues implements Serializable {
         return car.getRouteDestination() == rl;
     }
 
-    private void saveTrainRevenuesSerFile(TrainRevenues trainRevenues) {
-        Train train = trainRevenues.train;
+    private void saveTrainRevenuesSerFile() {
         deleteTrainRevenuesSerFile(train);
         OutputStream osFile, buffer;
         ObjectOutput output;
@@ -297,7 +281,7 @@ public class TrainRevenues implements Serializable {
             buffer = new BufferedOutputStream(osFile);
             output = new ObjectOutputStream(buffer);
 
-            output.writeObject(trainRevenues);
+            output.writeObject(this);
 
             output.close();
             buffer.close();
@@ -318,31 +302,54 @@ public class TrainRevenues implements Serializable {
         return changed;
     }
 
-    private boolean setTransportCharges(
-            Car car,
-            CarRevenue carRevenue,
-            RouteLocation rl,
-            RouteLocation rlNext
-    ) {
+    private boolean setTransportCharges(Car car, CarRevenue carRevenue) {
         boolean changed = false;
         RouteLocation carRouteLocation = car.getRouteLocation();
         RouteLocation carRouteDestination = car.getRouteDestination();
-        if (carRouteLocation == rl && carRouteLocation != carRouteDestination && rlNext != null) {
-            carRevenue.addTransportCharges(BigDecimal.valueOf(rl.getTransportFee()));
+
+        int totalRouteFee = 0;
+        RouteLocation origRouteLocation = null;
+        String carId = car.getId();
+        String[] origTrackIds = origTrackIdsByCarId.computeIfAbsent(
+                carId, k -> new String[]{car.getTrackId(), car.getDestinationTrackId()});
+        if (carRouteLocation == carRouteDestination) {
+            String origTrackId = origTrackIds[ORIG];
+            Location origLocation = null;
+            for (Location location : InstanceManager.getDefault(LocationManager.class).getList()) {
+                origLocation = location.getTracksList().stream().filter(
+                        track -> track.getId().equals(origTrackId)).findFirst().map(Track::getLocation).orElse(null);
+                if (origLocation != null) {
+                    break;
+                }
+            }
+            for (RouteLocation routeLocation : train.getRoute().getLocationsBySequenceList()) {
+                if (routeLocation.getLocation() == origLocation) {
+                    origRouteLocation = routeLocation;
+                }
+                if (routeLocation == carRouteDestination) {
+                    break;
+                }
+                if (origRouteLocation != null) {
+                    totalRouteFee += routeLocation.getTransportFee();
+                }
+            }
+        }
+        if (totalRouteFee > 0) {
+            carRevenue.setTransportCharges(BigDecimal.valueOf(totalRouteFee));
             changed = true;
         }
 
         return changed;
     }
 
-    private boolean setSwitchingCharges(Car trainCar, CarRevenue carRevenue) {
+    private boolean setSwitchingCharges(Car car, CarRevenue carRevenue) {
         boolean changed = false;
-        Track currentTrack = trainCar.getTrack();
-        Track destinyTrack = trainCar.getDestinationTrack();
+        Track currentTrack = car.getTrack();
+        Track destinyTrack = car.getDestinationTrack();
         boolean currentTrackIsSpur = currentTrack != null && currentTrack.isSpur();
         boolean destinyTrackIsSpur = destinyTrack != null && destinyTrack.isSpur();
         if (currentTrackIsSpur || destinyTrackIsSpur) {
-            carRevenue.setSwitchingCharges(getSwitchingChargeByLoadAndType(trainCar));
+            carRevenue.setSwitchingCharges(getSwitchingChargeByLoadAndType(car));
             changed = true;
         }
         return changed;
@@ -367,23 +374,22 @@ public class TrainRevenues implements Serializable {
         }
         boolean changed = false;
         for (Car car : getCarsOnTracks(rl.getLocation())) {
-            String carKey = car.toString();
-            if (!car.isCaboose() && !car.isPassenger() && !carKeysInDemur.contains(carKey)) {
+            String carId = car.getId();
+            if (!car.isCaboose() && !car.isPassenger() && !carIdsInDemur.contains(carId)) {
                 Track carTrack = car.getTrack();
                 boolean carIsOnSpur = carTrack != null && carTrack.isSpur();
                 int credits = Integer.parseInt(Setup.getDemurCredits());
                 boolean carInDemurrage = car.getWait() >= credits;
                 if (carIsOnSpur && carInDemurrage) {
                     changed = true;
-                    carKeysInDemur.add(carKey);
-                    CarRevenue carRevenue = carRevenuesByCarKey.get(carKey);
-                    if (carRevenue == null) {
-                        carRevenue = new CarRevenue(carKey, getCustomer(car));
-                        carRevenuesByCarKey.put(carKey, carRevenue);
+                    carIdsInDemur.add(carId);
+                    String customer = getCustomer(car);
+                    if (customer != null) {
+                        Map<String, CarRevenue> carRevenueByCustomer = carRevenueMapByCarId.computeIfAbsent(carId, k -> new TreeMap<>());
+                        CarRevenue carRevenue = carRevenueByCustomer.computeIfAbsent(customer, c -> new CarRevenue(carId, c, car.getLoadName()));
+                        String demurrage = car.getRoadName().toUpperCase().endsWith("X") ? Setup.getDemurrageXX() : Setup.getDemurrageRR();
+                        carRevenue.setDemurrageCharges(BigDecimal.valueOf(Integer.parseInt(demurrage)));
                     }
-                    String demurrage = car.getRoadName().toUpperCase().endsWith(
-                            "X") ? Setup.getDemurrageXX() : Setup.getDemurrageRR();
-                    carRevenue.setDemurrageCharges(BigDecimal.valueOf(Integer.parseInt(demurrage)));
                 }
             }
         }
@@ -391,65 +397,44 @@ public class TrainRevenues implements Serializable {
     }
 
     private boolean updateMulctCharges() {
+        String[] ids;
         boolean changed = false;
-        List<Car> trainCarList = InstanceManager.getDefault(CarManager.class)
-                .getList(train);
-        HashSet<Car> trainCarSet = new HashSet<>(trainCarList);
-        for (Car trainCar : trainCarSet) {
-            String carKey = trainCar.toString();
-            boolean carKeyInMulctSet = carKeysInMulctSet.contains(carKey);
-            if (!trainCar.isCaboose() && !trainCar.isPassenger() && !carKeyInMulctSet) {
-                String carCustomer = getCustomer(trainCar);
-                //
-                String[] ids = origTrackIds.get(carKey);
-                if (ids != null) {
-                    String origDestinationTrackId = ids[DEST];
-                    if (RollingStock.NONE.equals(origDestinationTrackId)) {
+        for (Car car : InstanceManager.getDefault(CarManager.class).getList(train)) {
+            String carId = car.getId();
+            if (!car.isCaboose() && !car.isPassenger() && !carIdsInMulctSet.contains(carId)) {
+                String customer = getCustomer(car);
+                if (customer != null) {
+                    Map<String, CarRevenue> carRevenueByCustomer = carRevenueMapByCarId.computeIfAbsent(carId, k -> new TreeMap<>());
+                    CarRevenue carRevenue = carRevenueByCustomer.get(customer);
+                    if ((ids = origTrackIdsByCarId.get(carId)) != null && RollingStock.NONE.equals(ids[TERM])) {
                         changed = true;
-
-                        carKeysInMulctSet.add(carKey);
-                        CarRevenue carRevenue = carRevenuesByCarKey.get(carKey);
+                        carIdsInMulctSet.add(carId);
                         if (carRevenue == null) {
-                            carRevenue = new CarRevenue(carKey, carCustomer);
-                            carRevenuesByCarKey.put(carKey, carRevenue);
+                            carRevenue = new CarRevenue(carId, customer, car.getLoadName());
+                            carRevenueByCustomer.put(customer, carRevenue);
                         }
-
                         carRevenue.setDiversionMulct(BigDecimal.valueOf(Integer.parseInt(Setup.getDivertMulct())));
                     } else {
-                        if (trainCar.getRouteLocation() == null && trainCar.getRouteDestination() == null) {
+                        if (car.getRouteLocation() == null && car.getRouteDestination() == null) {
                             changed = true;
-
-                            carKeysInMulctSet.add(carKey);
-                            trainCar.setTrain(null);
-                            trainCar.setDestination(null, null);
-                            trainCar.setRouteDestination(null);
-
-                            CarRevenue carRevenue = carRevenuesByCarKey.get(carKey);
+                            car.setTrain(null);
+                            car.setDestination(null, null);
+                            carIdsInMulctSet.add(carId);
                             if (carRevenue == null) {
-                                carRevenue = new CarRevenue(carKey, carCustomer);
-                                carRevenuesByCarKey.put(carKey, carRevenue);
+                                carRevenue = new CarRevenue(carId, customer, car.getLoadName());
+                                carRevenueByCustomer.put(customer, carRevenue);
                             }
                             carRevenue.setSwitchingCharges(BigDecimal.ZERO);
                             carRevenue.setTransportCharges(BigDecimal.ZERO);
                             carRevenue.setHazardFeeCharges(BigDecimal.ZERO);
-
-                            carRevenue.setCancellationMulct(
-                                    BigDecimal.valueOf(Integer.parseInt(Setup.getCancelMulct())));
-                        } else if (!origDestinationTrackId.equals(trainCar.getDestinationTrackId())) {
+                            carRevenue.setCancellationMulct(BigDecimal.valueOf(Integer.parseInt(Setup.getCancelMulct())));
+                        } else if ((ids = origTrackIdsByCarId.get(carId)) != null && !ids[TERM].equals(car.getDestinationTrackId())) {
                             changed = true;
-
-                            carKeysInMulctSet.add(carKey);
-                            CarRevenue carRevenue = carRevenuesByCarKey.get(carKey);
+                            carIdsInMulctSet.add(carId);
                             if (carRevenue == null) {
-                                carRevenue = new CarRevenue(carKey, carCustomer);
-                                carRevenuesByCarKey.put(carKey, carRevenue);
+                                carRevenue = new CarRevenue(carId, customer, car.getLoadName());
+                                carRevenueByCustomer.put(customer, carRevenue);
                             }
-                            carRevenue.setCustomerName(getCustomer(trainCar));
-
-                            carRevenue.setSwitchingCharges(BigDecimal.ZERO);
-                            carRevenue.setTransportCharges(BigDecimal.ZERO);
-                            carRevenue.setHazardFeeCharges(BigDecimal.ZERO);
-
                             carRevenue.setDiversionMulct(BigDecimal.valueOf(Integer.parseInt(Setup.getDivertMulct())));
                         }
                     }
@@ -468,11 +453,11 @@ public class TrainRevenues implements Serializable {
         for (Track track : rl.getLocation().getTracksList()) {
             if (track.isSpur()) {
                 String customer = TrainCommon.splitString(track.getName());
-                if (spurCapacityByCustomer.get(customer) == null) {
-                    spurCapacityByCustomer.put(customer, new HashMap<>());
+                if (spurCapacityMapByCustomer.get(customer) == null) {
+                    spurCapacityMapByCustomer.put(customer, new HashMap<>());
                     changed = true;
                 }
-                Map<String, Integer> trackIdLengthMap = spurCapacityByCustomer.get(customer);
+                Map<String, Integer> trackIdLengthMap = spurCapacityMapByCustomer.get(customer);
                 if (trackIdLengthMap.get(track.getId()) == null) {
                     trackIdLengthMap.put(track.getId(), track.getLength());
                     changed = true;
@@ -483,35 +468,34 @@ public class TrainRevenues implements Serializable {
         return changed;
     }
 
-    private boolean updateTrainCharges(RouteLocation rl, RouteLocation rlNext) {
+    private boolean updateTrainCharges(RouteLocation rl) {
         boolean changed = false;
-        List<Car> trainCarList = InstanceManager.getDefault(CarManager.class).getList(train);
-        Set<Car> trainCarSet = new HashSet<>(trainCarList);
-        for (Car trainCar : trainCarSet) {
-            if (!trainCar.isCaboose() && !trainCar.isPassenger()) {
-                CarRevenue carRevenue = getCarRevenue(trainCar);
-
-                if (setHazardFeeCharges(trainCar, carRevenue)) {
-                    changed = true;
-                }
-                if (setSwitchingCharges(trainCar, carRevenue)) {
-                    changed = true;
-                }
-                if (setTransportCharges(trainCar, carRevenue, rl, rlNext)) {
-                    changed = true;
-                }
-                if (isSpurPickUp(trainCar, rl)) {
-                    if (!Boolean.TRUE.equals(carRevenue.isPickup())) {
-                        carRevenue.setPickup(true);
-                        carRevenue.setLoadName(trainCar.getLoadName()); // car load name is mutable
+        for (Car car : InstanceManager.getDefault(CarManager.class).getList(train)) {
+            if (!car.isCaboose() && !car.isPassenger()) {
+                CarRevenue carRevenue = getCarRevenue(car);
+                if (carRevenue != null) {
+                    if (setHazardFeeCharges(car, carRevenue)) {
                         changed = true;
                     }
-                }
-                if (isSpurSetOut(trainCar, rl)) {
-                    if (!Boolean.FALSE.equals(carRevenue.isPickup())) {
-                        carRevenue.setPickup(false);
-                        carRevenue.setLoadName(trainCar.getLoadName()); // car load name is mutable
+                    if (setSwitchingCharges(car, carRevenue)) {
                         changed = true;
+                    }
+                    if (setTransportCharges(car, carRevenue)) {
+                        changed = true;
+                    }
+                    if (isSpurPickUp(car, rl)) {
+                        if (!Boolean.TRUE.equals(carRevenue.isPickup())) {
+                            carRevenue.setPickup(true);
+                            carRevenue.setLoadName(car.getLoadName()); // car load name is mutable
+                            changed = true;
+                        }
+                    }
+                    if (isSpurSetOut(car, rl)) {
+                        if (!Boolean.FALSE.equals(carRevenue.isPickup())) {
+                            carRevenue.setPickup(false);
+                            carRevenue.setLoadName(car.getLoadName()); // car load name is mutable
+                            changed = true;
+                        }
                     }
                 }
             }

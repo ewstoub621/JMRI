@@ -14,7 +14,7 @@ import java.util.Objects;
 public class CarRevenue implements Serializable, Comparable<CarRevenue> {
     static final long serialVersionUID = 1L;
 
-    private final String carKey;
+    private final String carId;
     private String customerName;
     private String loadName;
     private Boolean pickup;
@@ -25,12 +25,21 @@ public class CarRevenue implements Serializable, Comparable<CarRevenue> {
     private BigDecimal switchingCharges = BigDecimal.ZERO;
     private BigDecimal transportCharges = BigDecimal.ZERO;
 
-    public CarRevenue(String carKey, String customerName) {
-        if (carKey == null || customerName == null) {
-            throw new IllegalArgumentException("Parameters carKey and customer may not be null");
+    public static String getDefaultEmptyName() {
+        return Bundle.getMessage("EmptyCar");
+    }
+
+    public static String getDefaultLoadedName() {
+        return Bundle.getMessage("LoadedCar");
+    }
+
+    public CarRevenue(String carId, String customerName, String loadName) {
+        if (carId == null || customerName == null) {
+            throw new IllegalArgumentException("Parameters carId and customer may not be null");
         }
-        this.carKey = carKey;
+        this.carId = carId;
         this.customerName = customerName;
+        this.loadName = loadName;
     }
 
     public String getLoadName() {
@@ -39,10 +48,6 @@ public class CarRevenue implements Serializable, Comparable<CarRevenue> {
 
     public void setLoadName(String loadName) {
         this.loadName = loadName;
-    }
-
-    public void addTransportCharges(BigDecimal transportCharges) {
-        this.transportCharges = this.transportCharges.add(transportCharges);
     }
 
     public BigDecimal getDemurrageCharges() {
@@ -93,8 +98,8 @@ public class CarRevenue implements Serializable, Comparable<CarRevenue> {
         this.diversionMulct = diversionMulct;
     }
 
-    public String getCarKey() {
-        return carKey;
+    public String getCarId() {
+        return carId;
     }
 
     public String getCustomerName() {
@@ -122,21 +127,33 @@ public class CarRevenue implements Serializable, Comparable<CarRevenue> {
             return false;
         }
         CarRevenue that = (CarRevenue) o;
-        return carKey.equals(that.carKey) && customerName.equals(that.customerName);
+        return carId.equals(that.carId) && customerName.equals(that.customerName);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(carKey, customerName);
+        return Objects.hash(carId, customerName);
     }
 
     @Override
     public int compareTo(CarRevenue that) {
-        int compareCarKey = this.getCarKey().compareTo(that.getCarKey());
-        if (compareCarKey != 0) {
-            return compareCarKey;
+        int compareCarId = this.getCarId().compareTo(that.getCarId());
+        if (compareCarId != 0) {
+            return compareCarId;
         }
         return this.getCustomerName().compareTo(that.getCustomerName());
+    }
+
+    @Override
+    public String toString() {
+        return "\nCarRevenue{" + "carId='" + carId + '\'' + ", customerName='" + customerName + '\'' +
+                ", loadName='" + loadName + '\'' + ", pickup=" + pickup
+                + ", \n\tcancellationMulct=" + cancellationMulct
+                + ", \n\tdiversionMulct=" + diversionMulct
+                + ", \n\tdemurrageCharges=" + demurrageCharges
+                + ", \n\thazardFeeCharges=" + hazardFeeCharges
+                + ", \n\tswitchingCharges=" + switchingCharges
+                + ", \n\ttransportCharges=" + transportCharges + "}";
     }
 
 }
