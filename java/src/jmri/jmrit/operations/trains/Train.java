@@ -14,6 +14,7 @@ import java.util.Locale;
 import javax.annotation.Nonnull;
 import javax.swing.JOptionPane;
 
+import jmri.jmrit.operations.setup.TrainRevenues;
 import org.jdom2.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +40,6 @@ import jmri.jmrit.operations.routes.RouteLocation;
 import jmri.jmrit.operations.routes.RouteManager;
 import jmri.jmrit.operations.setup.Control;
 import jmri.jmrit.operations.setup.Setup;
-import jmri.jmrit.operations.setup.TrainRevenues;
 import jmri.jmrit.operations.trains.excel.TrainCustomManifest;
 import jmri.jmrit.roster.RosterEntry;
 import jmri.script.JmriScriptEngineManager;

@@ -37,9 +37,10 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     protected int _maxCarMoves = Setup.getCarMoves();
     protected String _randomControl = DISABLED;
     protected boolean _drops = true; // when true set outs allowed at this location
-    protected boolean _pickups = true; // when true pick ups allowed at this location
+    protected boolean _pickups = true; // when true pick-ups allowed at this location
     protected int _sequenceNum = 0; // used to determine location order in a route
     protected double _grade = 0; // maximum grade between locations
+    protected double _speedLimit = 40; // maximum train speed between locations
     protected int _transportFee = 20; // transport fee per car between locations
     protected int _wait = 0; // wait time at this location
     protected String _departureTime = NONE; // departure time from this location
@@ -287,9 +288,9 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     }
 
     /**
-     * When true allow car pick ups at this location
+     * When true allow car pick-ups at this location
      *
-     * @param pickups when true pick ups allowed at this location
+     * @param pickups when true pick-ups allowed at this location
      */
     public void setPickUpAllowed(boolean pickups) {
         boolean old = _pickups;
@@ -400,6 +401,19 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
 
     public double getGrade() {
         return _grade;
+    }
+
+    @SuppressFBWarnings(value = "FE_FLOATING_POINT_EQUALITY", justification = "firing property change doesn't matter")
+    public void setSpeedLimit(double speedLimit) {
+        double old = _speedLimit;
+        _speedLimit = speedLimit;
+        if (old != speedLimit) {
+            setDirtyAndFirePropertyChange("speedLimit", Double.toString(old), Double.toString(speedLimit)); // NOI18N
+        }
+    }
+
+    public double getSpeedLimit() {
+        return _speedLimit;
     }
 
     @SuppressFBWarnings(value = "FE_FLOATING_POINT_EQUALITY", justification = "firing property change doesn't matter")
@@ -615,7 +629,7 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
             try {
                 _sequenceNum = Integer.parseInt(a.getValue());
             } catch (NumberFormatException ee) {
-                log.error("Route location ({}) sequence id isn't a valid number", getName(), a.getValue());
+                log.error("Route location ({}) sequence id ({}) isn't a valid number", getName(), a.getValue());
             }
         }
         if ((a = e.getAttribute(Xml.COMMENT_COLOR)) != null) {

@@ -344,6 +344,7 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
     private String switchMetal = "300";
     private String switchTanks = "250";
     private String switchWoody = "350";
+    private String trainSpeedLimit = "40";
 
     // train revenue parameter changes
     public static final String REVENUE_CANCELLED_MULCT_CHANGE = "revenueCancelledMulctChange";
@@ -360,6 +361,7 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
     public static final String REVENUE_SWITCHING_METAL_CHANGE = "revenueSwitchingMetalChange";
     public static final String REVENUE_SWITCHING_TANKS_CHANGE = "revenueSwitchingTanksChange";
     public static final String REVENUE_SWITCHING_WOODY_CHANGE = "revenueSwitchingWoodyChange";
+    public static final String TRAIN_SPEED_LIMIT_CHANGE = "trainSpeedLimitChange";
 
     // property changes
     public static final String SWITCH_LIST_CSV_PROPERTY_CHANGE = "setupSwitchListCSVChange"; // NOI18N
@@ -1749,6 +1751,7 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
     public static String getDemurrageXX()         { return getDefault().demurrageXX; }
     public static String getDemurCredits()        { return getDefault().demurCredits; }
     public static String getMaxDiscount()         { return getDefault().maxDiscount; }
+    public static String getTrainSpeedLimit()     { return getDefault().trainSpeedLimit; }
 
     public static void setDemurCredits(String demurCredits) {
         String old = getDefault().demurCredits;
@@ -1846,6 +1849,13 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
         getDefault().maxDiscount = maxDiscount;
         if (old == null || !old.equals(maxDiscount)) {
             setDirtyAndFirePropertyChange(REVENUE_MAX_DISCOUNT_CHANGE, old, maxDiscount);
+        }
+    }
+    public static void setTrainSpeedLimit(String trainSpeedLimit) {
+        String old = getDefault().trainSpeedLimit;
+        getDefault().trainSpeedLimit = trainSpeedLimit;
+        if (old == null || !old.equals(trainSpeedLimit)) {
+            setDirtyAndFirePropertyChange(TRAIN_SPEED_LIMIT_CHANGE, old, trainSpeedLimit);
         }
     }
 

@@ -40,7 +40,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     private static final int LOC_3 = 3;
     private static final int LOC_4 = 4;
     private static final int LOC_5 = 5;
-    private static final double TRAIN_TOTAL_REVENUE = 5713.75;
+    private static final double TRAIN_TOTAL_REVENUE = 6566.25;
 
     private CarManager carManager;
     private CarTypes carTypes;
@@ -97,8 +97,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
 
     @Test
     public void testCTor() throws IOException {
-        buildCsvRailroad();
-//        Train train = trainManager.getTrainById("1");
+        buildRailroad();
         assertTrue(train.build());
 
         File trainRevenuesSerFile = TrainRevenues.getTrainRevenuesSerFile(train);
@@ -115,7 +114,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     public void testCreateCsvRevenueTrainDE() throws IOException {
         try {
             Locale.setDefault(Locale.GERMANY);
-            createBuildVerifyCsvTrain(false);
+            verifyCsvRevenue(false);
         } finally {
             Locale.setDefault(defaultLocale);
         }
@@ -125,7 +124,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     public void testCreateCsvRevenueTrainDK() throws IOException {
         try {
             Locale.setDefault(new Locale("da", "DK"));
-            createBuildVerifyCsvTrain(true);
+            verifyCsvRevenue(true);
         } finally {
             Locale.setDefault(defaultLocale);
         }
@@ -135,7 +134,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     public void testCreateCsvRevenueTrainFR() throws IOException {
         try {
             Locale.setDefault(Locale.FRANCE);
-            createBuildVerifyCsvTrain(false);
+            verifyCsvRevenue(false);
         } finally {
             Locale.setDefault(defaultLocale);
         }
@@ -145,7 +144,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     public void testCreateCsvRevenueTrainGB() throws IOException {
         try {
             Locale.setDefault(Locale.UK);
-            createBuildVerifyCsvTrain(false);
+            verifyCsvRevenue(false);
         } finally {
             Locale.setDefault(defaultLocale);
         }
@@ -155,7 +154,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     public void testCreateCsvRevenueTrainIT() throws IOException {
         try {
             Locale.setDefault(Locale.ITALY);
-            createBuildVerifyCsvTrain(false);
+            verifyCsvRevenue(false);
         } finally {
             Locale.setDefault(defaultLocale);
         }
@@ -165,7 +164,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     public void testCreateCsvRevenueTrainJP() throws IOException {
         try {
             Locale.setDefault(Locale.JAPAN);
-            createBuildVerifyCsvTrain(false);
+            verifyCsvRevenue(false);
         } finally {
             Locale.setDefault(defaultLocale);
         }
@@ -175,7 +174,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     public void testCreateCsvRevenueTrainNL() throws IOException {
         try {
             Locale.setDefault(new Locale("nl", "NL"));
-            createBuildVerifyCsvTrain(false);
+            verifyCsvRevenue(false);
         } finally {
             Locale.setDefault(defaultLocale);
         }
@@ -185,13 +184,15 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     public void testCreateCsvRevenueTrainUS() throws IOException {
         try {
             Locale.setDefault(Locale.US);
-            createBuildVerifyCsvTrain(false);
+            verifyCsvRevenue(false);
         } finally {
             Locale.setDefault(defaultLocale);
         }
     }
 
-    private void buildCsvRailroad() {
+    private void buildRailroad() {
+        Setup.setBuildReportLevel(Setup.BUILD_REPORT_VERY_DETAILED);
+
         String dEn = CarRevenue.getDefaultEmptyName();
         String dLn = CarRevenue.getDefaultLoadedName();
 
@@ -209,26 +210,31 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         tracksByTrackId = new TreeMap<>();
 
         Track track;
+        String road = "CP";
+        Engine engine = null;
+        RouteLocation rl3;
+        RouteLocation rl4;
         int customerNumber = 1;
         Location location;
         for (int loc = LOC_1; loc <= LOC_5; loc++) {
             location = registerNewLocation(loc);
-            registerNewRouteLocation(loc, location);
 
             switch (loc) {
                 case LOC_1:
-                    track = createNewTrack(0, location, "Staging " + loc, Track.STAGING);
-                    registerNewEngine(track);
+                    registerNewRouteLocation(loc, 2 * loc, 0.0, location);
+
+                    track = createNewTrack(0, location, "Yard " + loc, Track.YARD);
+                    engine = registerNewEngine(track, road, "500" + loc, "FT");
+                    updateCar(road, "C10099", "Caboose", dEn, track).setCaboose(true);
 
                     updateCar("C&O", "1002", "FlatTimber", dLn, track);
                     updateCar("CONX", "5092", "Tank Oil", dLn, track).setHazardous(true);
                     updateCar("N&W", "29002", "Stock", dLn, track);
                     updateCar("NKP", "99713", "HopGrain", dLn, track);
-
-                    Car caboose = updateCar("CP", "C10099", "Caboose", dEn, track);
-                    caboose.setCaboose(true);
                     break;
                 case LOC_2:
+                    registerNewRouteLocation(loc, 2 * loc, 1.0, location);
+
                     track = createNewTrack(customerNumber, location, "Customer " + customerNumber + "-" + loc, Track.SPUR);
                     updateCar("C&O", "51137", "FD-coil", dLn, track);
                     updateCar("GBW", "906", "Boxcar", "Paper", track);
@@ -240,6 +246,19 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("N&W", "76566", "Hopper", "Feed", track);
                     break;
                 case LOC_3:
+                    rl3 = registerNewRouteLocation(loc, 2 * loc, 2.0, location);
+
+                    track = createNewTrack(0, location, "Yard " + loc, Track.YARD);
+                    track.setBlockCarsEnabled(true);
+                    engine.reset();
+                    registerNewEngine(track, road, "500" + loc, "TRAINMASTER");
+                    train.setSecondLegOptions(Train.CHANGE_ENGINES);
+                    train.setSecondLegStartRouteLocation(rl3);
+                    train.setSecondLegNumberEngines("1");
+                    train.setSecondLegEngineModel("TRAINMASTER");
+                    train.setSecondLegEngineRoad(road);
+                    train.setSecondLegCabooseRoad(road);
+
                     track = createNewTrack(customerNumber, location, "Customer " + customerNumber + "-" + loc, Track.SPUR);
                     updateCar("VGN", "15779", "Hopper", "Coal", track);
 
@@ -249,6 +268,19 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("UP", "46774D", "Stock", dLn, track);
                     break;
                 case LOC_4:
+                    rl4 = registerNewRouteLocation(loc, 2 * loc, -3.0, location);
+                    train.setSecondLegEndRouteLocation(rl4);
+                    engine.reset();
+                    track = createNewTrack(0, location, "Yard " + loc, Track.YARD);
+                    track.setBlockCarsEnabled(true);
+                    registerNewEngine(track, road, "500" + loc, "RS1");
+                    train.setThirdLegOptions(Train.CHANGE_ENGINES);
+                    train.setThirdLegStartRouteLocation(rl4);
+                    train.setThirdLegNumberEngines("1");
+                    train.setThirdLegEngineModel("RS1");
+                    train.setThirdLegEngineRoad(road);
+                    train.setThirdLegCabooseRoad(road);
+
                     track = createNewTrack(customerNumber, location, "Customer " + customerNumber + "-" + loc, Track.SPUR);
                     updateCar("FCKX", "6302", "RB", dLn, track).setWait(4);
 
@@ -257,11 +289,18 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("VGN", "15508", "Hopper", dLn, track);
                     break;
                 case LOC_5:
-                    createNewTrack(6, location, "Staging " + loc, Track.STAGING);
+                    registerNewRouteLocation(loc, 2 * loc, 0.0, location);
+                    createNewTrack(6, location, "Yard " + loc, Track.YARD);
                     break;
             }
         }
-        assertTrue(train.build());
+        train.build();
+
+        for (Engine e : InstanceManager.getDefault(EngineManager.class).getList(train)) {
+            System.out.println(String.format("Engine %-5s HP %-6s at %-3s tons: %s", e.getHp(), e.getTypeName(), e.getWeightTons(), e.getModel()));
+        }
+
+        assertTrue(train.isBuilt());
     }
 
     private void conductorAdd(String road, String number, String type, String load, int origCustomer, int origLoc, int termCustomer, int termLoc) {
@@ -296,46 +335,6 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
 
             car.setRouteDestination(routeLocationsById.get(String.format("%sr%d", ID, termLoc)));
         }
-    }
-
-    private void createBuildVerifyCsvTrain(boolean restartMove) throws IOException {
-       buildCsvRailroad();
-
-        for (int loc = LOC_1; loc < LOC_5; loc++) {
-            switch (loc) {
-                case LOC_1:
-                    conductorCancel("C&O", "1002");
-                    conductorDivert("CONX", "5092", 2, 2);
-                    break;
-                case LOC_2:
-                    conductorAdd("UP", "99999", "Gondola", "Scrap", 2, 2, 3, 3);
-                    conductorDivert("GBW", "906", 3, 4);
-                    break;
-                case LOC_3:
-                    conductorAdd("NKP", "76555", "XM", "Seed", 3, 3, 4, 4);
-                    conductorCancel("VGN", "15779");
-                    conductorDivert("UP", "46774D", 3, 4);
-                    break;
-                case LOC_4:
-                    conductorCancel("VGN", "15508");
-                    break;
-            }
-            if (restartMove) {
-                verifyRestartMoveRestoreCycle(train);
-            } else {
-                train.move();
-            }
-        }
-
-        train.terminate();
-        assertFalse(train.isBuilt());
-
-        TreeMap<Integer, List<String>> csvRevenueAsTreeMap = getCsvRevenueAsTreeMap(train);
-        List<String> lastRowValues = csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1);
-        assertEquals(
-                NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_REVENUE)),
-                csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1).get(lastRowValues.size() - 1)
-        );
     }
 
     private Track createNewTrack(int customerNumber, Location location, String trackName, String trackType) {
@@ -383,30 +382,36 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         return map;
     }
 
-    private void registerNewEngine(Track track) {
-        Engine engine = new Engine("CP", "5001");
-        engine.setModel("GP30");
+    private Engine registerNewEngine(Track track, String road, String number, String model) {
+        Engine engine = new Engine(road, number);
+        engine.setModel(model);
         engine.setLocation(track.getLocation(), track);
         engineManager.register(engine);
+
+        return engine;
     }
 
-    private Location registerNewLocation(int i) {
-        Location location = new Location(String.valueOf(i), "Location " + i);
+    private Location registerNewLocation(int loc) {
+        Location location = new Location(String.valueOf(loc), "Location " + loc);
         location.setSwitchListEnabled(true);
         locationManager.register(location);
 
         return location;
     }
 
-    private void registerNewRouteLocation(int sequenceNumber, Location location) {
+    private RouteLocation registerNewRouteLocation(int sequenceNumber, int wait, double grade, Location location) {
         String rlId = ID + "r" + sequenceNumber;
         RouteLocation routeLocation = new RouteLocation(rlId, location);
+        routeLocation.setGrade(grade);
         routeLocation.setSequenceNumber(sequenceNumber);
+        routeLocation.setWait(wait);
         routeLocation.setTrainDirection(RouteLocation.EAST);
         routeLocation.setMaxCarMoves(25);
         routeLocation.setMaxTrainLength(1000);
         routeLocationsById.put(rlId, routeLocation);
         route.register(routeLocation);
+
+        return routeLocation;
     }
 
     private Train registerNewTrain() {
@@ -432,6 +437,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
             car.setBuilt("1984");
             car.setOwner("DAB");
             car.setLength("40");
+            car.setWeightTons("75");
             car.setMoves(0);
             car.setColor("Black");
             car.setLoadName(load);
@@ -476,4 +482,209 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         assertTrue(trainManagerXml.getTrainRevenuesSerFile(train).exists());
     }
 
+    private void verifyCsvRevenue(boolean restartMove) throws IOException {
+        buildRailroad();
+
+        for (int loc = LOC_1; loc < LOC_5; loc++) {
+            switch (loc) {
+                case LOC_1:
+                    conductorCancel("C&O", "1002");
+                    conductorDivert("CONX", "5092", 2, 2);
+                    break;
+                case LOC_2:
+                    conductorAdd("UP", "99999", "Gondola", "Scrap", 2, 2, 3, 3);
+                    conductorDivert("GBW", "906", 3, 4);
+                    conductorDivert("N&W", "76566", 4, 4);
+                    break;
+                case LOC_3:
+                    conductorAdd("NKP", "76555", "XM", "Seed", 3, 3, 4, 4);
+                    conductorCancel("VGN", "15779");
+                    conductorDivert("UP", "46774D", 3, 4);
+                    break;
+                case LOC_4:
+                    conductorCancel("VGN", "15508");
+                    break;
+            }
+            if (restartMove) {
+                verifyRestartMoveRestoreCycle(train);
+            } else {
+                train.move();
+            }
+        }
+
+        train.terminate();
+        assertFalse(train.isBuilt());
+
+        loadRevenueMaps();
+
+        TreeMap<Integer, List<String>> csvRevenueAsTreeMap = getCsvRevenueAsTreeMap(train);
+        List<String> lastRowValues = csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1);
+        assertEquals(
+                NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_REVENUE)),
+                csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1).get(lastRowValues.size() - 1)
+        );
+    }
+
+    private Map<String, Double> gradePercent;
+    private Map<String, Integer> trainHp;
+    private Map<String, String> engineModel;
+    private Map<String, Integer> trainCarsTonWeight;
+    private Map<String, Double> trainStartingForce;
+    private Map<String, Integer> trainTonWeight;
+    private Map<String, Integer> travelMinutes;
+    private Map<String, Double> startingResistance;
+    private Map<String, Double> gradeResistance;
+    private Map<String, Integer> trainAxles;
+
+    private void loadRevenueMaps() {
+        TrainRevenues trainRevenues = train.getTrainRevenues();
+
+        gradePercent = trainRevenues.getGradePercent();
+        trainHp = trainRevenues.getTrainHp();
+        engineModel = trainRevenues.getEngineModel();
+        trainCarsTonWeight = trainRevenues.getTrainCarsTons();
+        trainTonWeight = trainRevenues.getTrainTonWeight();
+        travelMinutes = trainRevenues.getTravelMinutes();
+        trainStartingForce = trainRevenues.getTrainStartingForce();
+        trainAxles = trainRevenues.getTrainAxles();
+
+        System.out.println("\ntrain grade (%): " + gradePercent);
+        System.out.println("train model: " + engineModel);
+        System.out.println("train power (HP): " + trainHp);
+        System.out.println("train cars weight (Tons): " + trainCarsTonWeight);
+        System.out.println("train total weight (Tons): " + trainTonWeight);
+        System.out.println("train travel times (Minutes): " + travelMinutes);
+        System.out.println("train starting force (Tons): " + trainStartingForce);
+        System.out.println("train axles: " + trainAxles);
+    }
+
+    private static final int COUPLER_PULL_LIMIT_TONS = 125;
+    private static final double NEWTONS_PER_TON = 8896.4;
+
+    /**
+     * Force limit to protect older couplers from breaking
+     *
+     * @param mks true to yield MKS (Newtons) units, false to yield ton-force units
+     *
+     * @return limit of applied pulling force to safely pull cars behind leading engines
+     */
+    private double zGetDrawbarPullLimit(boolean mks) {
+        if (mks) {
+            return COUPLER_PULL_LIMIT_TONS * NEWTONS_PER_TON; // in Newtons
+        } else {
+            return COUPLER_PULL_LIMIT_TONS; // in ton-force units
+        }
+    }
+
+    /**
+     * The force due to the grade for the total train weight at this location
+     *
+     * A positive grade (climbing upward) generates a force opposed to forward motion.
+     * A negative grade (climbing downward) generates a force assisting forward motion.
+     *
+     * @param rl the current RouteLocation
+     * @param mks true to yield MKS (Newtons) units, false to yield ton-force units
+     *
+     * @return grade resistant force
+     */
+    private double zGetGradeResistance(RouteLocation rl, boolean mks) {
+        double tonForce = gradePercent.get(rl.getId()) / 100.0 * trainTonWeight.get(rl.getId());
+        if (mks) {
+            return tonForce * NEWTONS_PER_TON; // in Newtons
+        } else {
+            return tonForce; // in ton-force units
+        }
+    }
+
+    /**
+     * The retarding force due to rolling resistance,
+     * using a coefficient of friction, for steel train wheels on steel track
+     *
+     * @param rl the current RouteLocation
+     * @param mks true to yield MKS (Newtons) units, false to yield ton-force units
+     *
+     * @return rolling resistant force
+     */
+    private double zGetRollingResistance(RouteLocation rl, boolean mks) {
+        double tonForce = 0.0015 * trainTonWeight.get(rl.getId());
+        if (mks) {
+            return tonForce * NEWTONS_PER_TON; // in Newtons
+        } else {
+            return tonForce; // in ton-force units
+        }
+    }
+
+    /**
+     * The starting force available for train acceleration by applying maximum power at rest at this location
+     *
+     * @param rl the current RouteLocation
+     * @param mks true to yield MKS (Newtons) units, false to yield ton-force units
+     *
+     * @return tractive force available for acceleration
+     */
+    private double zGetStartingForce(RouteLocation rl, boolean mks) {
+        double tonForce = trainStartingForce.get(rl.getId());
+        if (mks) {
+            return tonForce * NEWTONS_PER_TON; // in Newtons
+        } else {
+            return tonForce; // in ton-force units
+        }
+    }
+
+    /**
+     * Starting resistance due to wheel bearing friction when at rest
+     *
+     * Type of Bearings - Above Freezing    - Below Freezing
+     * Journal Bearing      25 lb / ton         35 lb / ton
+     * Roller Bearing        5 lb / ton         15 lb / ton
+     *
+     * @param rl current route location
+     * @param mks true to yield MKS (Newtons) units, false to yield ton-force units
+     * @param journalBearing
+     * @param aboveFreezing
+     *
+     * @return starting resistant force for the total train weight at this location
+     */
+    private double zGetStartingResistance(RouteLocation rl, boolean mks, boolean journalBearing, boolean aboveFreezing) {
+        double bearingFactor = (journalBearing ? (aboveFreezing ? 25 : 35) : (aboveFreezing ? 5 : 15)) / 2000.0;
+        double tonForce = bearingFactor * trainTonWeight.get(rl.getId());
+        if (mks) {
+            return tonForce * NEWTONS_PER_TON; // in Newtons
+        } else {
+            return tonForce; // in ton-force units
+        }
+    }
+
+    private static final double HP_TO_WATTS = 745.7;
+    private static final double MPH_TO_MPS = 0.44704;
+    private static final double POWER_EFFICIENCY = 0.72;
+
+    /**
+     *
+     *
+     * @param rl current route location
+     * @param mks true to yield MKS (Newtons) units, false to yield ton-force units
+     * @param speed if MKS in meters per second (MPS), otherwise MPH
+     *
+     * @return tractive force to accelerate the train at this location
+     */
+    private double zGetTractiveEffort(RouteLocation rl, boolean mks, double speed) {
+        double mksSpeed = mks ? speed : MPH_TO_MPS * speed;
+        double mksPower = HP_TO_WATTS * trainHp.get(rl.getId());
+        double mksForce = POWER_EFFICIENCY * mksPower / mksSpeed;
+        if (mks) {
+            return mksForce;
+        } else {
+            return mksForce * NEWTONS_PER_TON;
+        }
+    }
+
+    @Test
+    public void testTractiveEffort() throws IOException {
+        verifyCsvRevenue(false);
+        for (RouteLocation rl : routeLocationsById.values()) {
+            double tractiveEffortTons = zGetTractiveEffort(rl,false, rl.getSpeedLimit());
+            assertTrue(0 < tractiveEffortTons);
+        }
+    }
 }
