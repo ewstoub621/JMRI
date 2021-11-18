@@ -515,7 +515,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         train.terminate();
         assertFalse(train.isBuilt());
 
-        loadRevenueMaps();
+//        loadRevenueMaps();
 
         TreeMap<Integer, List<String>> csvRevenueAsTreeMap = getCsvRevenueAsTreeMap(train);
         List<String> lastRowValues = csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1);
@@ -523,6 +523,10 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                 NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_REVENUE)),
                 csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1).get(lastRowValues.size() - 1)
         );
+
+        TrainRevenues trainRevenues = train.getTrainRevenues();
+        TrainMovements trainMovements = new TrainMovements(trainRevenues);
+        assertNotNull(trainMovements);
     }
 
     private Map<String, Double> gradePercent;

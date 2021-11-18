@@ -41,6 +41,16 @@ public class TrainRevenues implements Serializable {
     private Map<String, String[]> origTrackIdsByCarId;
     private BigDecimal maxRouteTransportFee = BigDecimal.ZERO;
 
+    // these maps are updated after each move until the train is terminated
+    private final Map<String, Double> gradePercent = new HashMap<>();
+    private final Map<String, Integer> trainHp = new HashMap<>();
+    private final Map<String, String> engineModel = new HashMap<>();
+    private final Map<String, Integer> trainCarsTons = new HashMap<>();
+    private final Map<String, Integer> trainTonWeight = new HashMap<>();
+    private final Map<String, Integer> travelMinutes = new HashMap<>();
+    private final Map<String, Double> trainStartingForce = new HashMap<>();
+    private final Map<String, Integer> trainAxles = new HashMap<>();
+
     public TrainRevenues(Train train) {
         this.train = train;
     }
@@ -176,7 +186,7 @@ public class TrainRevenues implements Serializable {
         updateDemurCharges(rl);
         updateMulctCharges();
         updateTrainCharges(rl);
-        updateTrainExpenseData(rl);
+        updateTrainMovementData(rl);
 
         if (rl != train.getTrainTerminatesRouteLocation()) {
             maxRouteTransportFee = maxRouteTransportFee.add(BigDecimal.valueOf(rl.getTransportFee()));
@@ -459,15 +469,6 @@ public class TrainRevenues implements Serializable {
         }
     }
 
-    private final Map<String, Double> gradePercent = new HashMap<>();
-    private final Map<String, Integer> trainHp = new HashMap<>();
-    private final Map<String, String> engineModel = new HashMap<>();
-    private final Map<String, Integer> trainCarsTons = new HashMap<>();
-    private final Map<String, Integer> trainTonWeight = new HashMap<>();
-    private final Map<String, Integer> travelMinutes = new HashMap<>();
-    private final Map<String, Double> trainStartingForce = new HashMap<>();
-    private final Map<String, Integer> trainAxles = new HashMap<>();
-
     public Map<String, Double> getGradePercent() { return gradePercent; }
     public Map<String, Integer> getTrainHp() { return trainHp; }
     public Map<String, String> getEngineModel() { return engineModel; }
@@ -477,7 +478,7 @@ public class TrainRevenues implements Serializable {
     public Map<String, Integer> getTravelMinutes() { return travelMinutes; }
     public Map<String, Integer> getTrainAxles() { return trainAxles; }
 
-    private void updateTrainExpenseData(RouteLocation rl) {
+    private void updateTrainMovementData(RouteLocation rl) {
         gradePercent.put(rl.getId(), rl.getGrade());
         trainHp.put(rl.getId(), this.getEngineHp(rl));
         engineModel.put(rl.getId(), this.getEngineModel(rl));
@@ -552,6 +553,5 @@ public class TrainRevenues implements Serializable {
         }
         return weight;
     }
-
 
 }

@@ -2,141 +2,162 @@ package jmri.jmrit.operations.trains;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import java.util.List;
+
+import static jmri.jmrit.operations.trains.TrainMovements.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 class TrainMovementsTest {
-    private static final double MPH_TO_MPS = 0.44704;
 
     @Test
     public void testAcceleration() {
-        double force = 1; // force of 1 Newton in SI or 1 ton in US
+        double forceSI = 100; // Newtons (which are pretty wimpy units)
+        double weightSI = 100 * G_SI; // weight of 100 kg = 980.66 Newtons
+        double expectedAccelerationSI = 1.0; // in MPS, per second
+        double calculatedAccelerationSI = getAcceleration(forceSI, weightSI, true);
+        assertEquals(expectedAccelerationSI, calculatedAccelerationSI, 0.00001);
 
-        double weightSI = TrainMovements.G_SI; // weight of 1 kg
-        double expectedAccelerationSI = 1; // 1 meter/sec/sec
-        assertEquals(expectedAccelerationSI, TrainMovements.getAcceleration(weightSI, force, true));
-        assertEquals(expectedAccelerationSI / 10, TrainMovements.getAcceleration(10 * weightSI, force, true));
-        assertEquals(10 * expectedAccelerationSI, TrainMovements.getAcceleration(weightSI, 10 * force, true));
-        assertEquals(expectedAccelerationSI, TrainMovements.getAcceleration(10 * weightSI, 10 * force, true));
-
-        double weightUS = 1; // tons
-        double expectedAccelerationUS = TrainMovements.MPH_PER_FPS * TrainMovements.G_US;
-        assertEquals(expectedAccelerationUS, TrainMovements.getAcceleration(weightUS, force, false), 0.0005);
+        double forceUS = forceSI / NEWTONS_PER_TON; // 0.01124045 tons in US
+        double weightUS = weightSI / NEWTONS_PER_TON; // 0.11023 tons
+        double expectedAccelerationUS = expectedAccelerationSI * MPH_PER_MPS; // 2.2369 MPH, per second
+        double calculatedAccelerationUS = getAcceleration(forceUS, weightUS, false);
+        assertEquals(expectedAccelerationUS, calculatedAccelerationUS, 0.001);
     }
 
     @Test
     public void testDrawbarPullLimit() {
-        assertEquals(125, TrainMovements.getDrawbarPullLimit(false));
-        assertEquals(1112050, TrainMovements.getDrawbarPullLimit(true));
+        double limitLbs = 250000; // lbs
+
+        double expectedLimitTons = limitLbs / LBS_PER_TON; // 125 tons
+        double calculatedLimitTons = getDrawbarPullLimit(false);
+        assertEquals(expectedLimitTons, calculatedLimitTons);
+
+        double expectedLimitNewtons = expectedLimitTons * NEWTONS_PER_TON; // 1112055 Newtons
+        double calculatedLimitNewtons = getDrawbarPullLimit(true);
+        assertEquals(expectedLimitNewtons, calculatedLimitNewtons);
     }
 
     @Test
     public void testGradeResistance() {
-        double weight = 2000;
+        double weight = 100;
         double grade = 1.0;
 
-        double expectedForce = 20;
-        assertEquals(expectedForce, TrainMovements.getGradeResistance(weight, grade));
+        double expectedForce = 1;
+        double calculatedForce = getGradeResistance(weight, grade);
+        assertEquals(expectedForce, calculatedForce);
     }
 
     @Test
-    public void testNetForceSI() {
-        double power = 1500 * TrainMovements.WATTS_PER_HP; // Newtons
-        double speed = 0;
-        double driverWeight = 115 * TrainMovements.NEWTONS_PER_TON; // Newtons
-        double weight = 300 * TrainMovements.NEWTONS_PER_TON; // Newtons
-        double gradePercent = 0;
-        boolean journalBearing = true;
-        boolean aboveFreezing = false;
+    public void testNetForceAtRest() {
+        double totalWeightTons = 50;
+        int driverWeightTons = 1;
 
-        double tractiveForceLimit = TrainMovements.getTractiveForceLimit(driverWeight,true);
-        if (speed == 0) {
-            double expectedNetForce = 209065; // Newtons
-            double expectedAcceleration = 0.7682; // m/s/s
+        double calculatedNetForceAtRestTonsTF = getNetForceAtRest(totalWeightTons, driverWeightTons * 1, true, false, 0, false); // 0
+        double calculatedNetForceAtRestTonsTT = getNetForceAtRest(totalWeightTons, driverWeightTons * 2, true, true, 0, false); // 0
+        double calculatedNetForceAtRestTonsFF = getNetForceAtRest(totalWeightTons, driverWeightTons * 3, false, false, 0, false); // 0.375
+        double calculatedNetForceAtRestTonsFT = getNetForceAtRest(totalWeightTons, driverWeightTons * 4, false, true, 0, false); // 0.875
 
-            double calculatedNetForce = TrainMovements.getNetForceAtRest(weight, journalBearing, aboveFreezing, tractiveForceLimit);
-            assertEquals(expectedNetForce, calculatedNetForce, 0.5);
+        assertFalse(calculatedNetForceAtRestTonsTF > 0);
+        assertFalse(calculatedNetForceAtRestTonsTT > 0);
+        assertTrue(calculatedNetForceAtRestTonsFF > 0);
+        assertTrue(calculatedNetForceAtRestTonsFT > 0);
 
-            double calculatedAcceleration = TrainMovements.getAcceleration(weight, calculatedNetForce, true);
-            assertEquals(expectedAcceleration, calculatedAcceleration, 0.0001);
+        double totalWeightNewtons = totalWeightTons * NEWTONS_PER_TON;
+        double driverWeightNewtons = driverWeightTons * NEWTONS_PER_TON;
 
-            speed += calculatedAcceleration; // after constant net force applied for 1 second
-        }
-        if (speed > 0) {
-            double expectedNetForce = 251500; // Newtons
-            double expectedAcceleration = 0.9241; // m/s/s
+        double calculatedNetForceAtRestNewtonsTF = getNetForceAtRest(totalWeightNewtons, driverWeightNewtons * 1, true, false, 0, true); // 0
+        double calculatedNetForceAtRestNewtonsTT = getNetForceAtRest(totalWeightNewtons, driverWeightNewtons * 2, true, true, 0, true); // 0
+        double calculatedNetForceAtRestNewtonsFF = getNetForceAtRest(totalWeightNewtons, driverWeightNewtons * 3, false, false, 0, true); // 3336
+        double calculatedNetForceAtRestNewtonsFT = getNetForceAtRest(totalWeightNewtons, driverWeightNewtons * 4, false, true, 0, true); // 7784
 
-            double calculatedNetForce = TrainMovements.getNetForceInMotion(power, speed, weight, gradePercent, true, tractiveForceLimit);
-            assertEquals(expectedNetForce, calculatedNetForce, 2);
-
-            double calculatedAcceleration = TrainMovements.getAcceleration(weight, calculatedNetForce, true);
-            assertEquals(expectedAcceleration, calculatedAcceleration, 0.0001);
-
-            speed += calculatedAcceleration; // after constant net force applied for 1 second
-        }
-
-        double expectedSpeed = 1.692;
-        assertEquals(expectedSpeed, speed, 0.0005);
+        assertFalse(calculatedNetForceAtRestNewtonsTF > 0);
+        assertFalse(calculatedNetForceAtRestNewtonsTT > 0);
+        assertTrue(calculatedNetForceAtRestNewtonsFF > 0);
+        assertTrue(calculatedNetForceAtRestNewtonsFT > 0);
     }
 
     @Test
-    public void testNetForceUS() {
-        double power = 1500; // tons
-        double speed = 0;
-        double driverWeight = 115; // tons
-        double weight = 300; // tons
-        double gradePercent = 0;
-        boolean journalBearing = true;
-        boolean aboveFreezing = false;
+    public void testPositionAfterOneSecond() {
+        double accelerationSI = getAcceleration(100, 100 * G_SI, true); // 1.0 MPS/s
 
-        double tractiveForceLimit = TrainMovements.getTractiveForceLimit(driverWeight,false);
-        if (speed == 0) {
-            double expectedNetForce = 209065 / TrainMovements.NEWTONS_PER_TON; // Newtons -> tons
-            double expectedAcceleration = 0.7682 * TrainMovements.MPH_PER_MPS; // m/s/s -> MPH/s
+        double positionSI_1 = getDistanceAfterOneSecond(0, 0, accelerationSI, true); // 0.5 meters
+        assertEquals(0.5, positionSI_1, 0.0000001);
+        double speedSI_1 = getSpeedAfterOneSecond(0, accelerationSI); // 1.0 MPS
 
-            double calculatedNetForce = TrainMovements.getNetForceAtRest(weight, journalBearing, aboveFreezing, tractiveForceLimit);
-            assertEquals(expectedNetForce, calculatedNetForce, 0.5);
+        double positionSI_2 = getDistanceAfterOneSecond(positionSI_1, speedSI_1, accelerationSI, true); // 2.0 meters
+        assertEquals(2.0, positionSI_2, 0.00001);
+        double speedSI_2 = getSpeedAfterOneSecond(speedSI_1, accelerationSI); // 2.0 MPS
 
-            double calculatedAcceleration = TrainMovements.getAcceleration(weight, calculatedNetForce, false);
-            assertEquals(expectedAcceleration, calculatedAcceleration, 0.0001);
+        double positionSI_3 = getDistanceAfterOneSecond(positionSI_2, speedSI_2, accelerationSI, true); // 4.5 meters
+        assertEquals(4.5, positionSI_3, 0.00001);
 
-            speed += calculatedAcceleration; // after constant net force applied for 1 second
-        }
-        if (speed > 0) {
-            double expectedNetForce = 251768 / TrainMovements.NEWTONS_PER_TON; // Newtons -> tons
-            double expectedAcceleration = 0.9241 * TrainMovements.MPH_PER_MPS; // m/s/s -> MPH/s
+        double accelerationUS = accelerationSI * MPH_PER_MPS;
 
-            double calculatedNetForce = TrainMovements.getNetForceInMotion(power, speed, weight, gradePercent, false, tractiveForceLimit);
-            assertEquals(expectedNetForce, calculatedNetForce, 0.5);
+        double positionUS_1 = getDistanceAfterOneSecond(0, 0, accelerationUS, false); // 0.000311 miles
+        assertEquals(0.5 / METERS_PER_MILE, positionUS_1, 0.00001);
+        double speedUS_1 = speedSI_1 * MPH_PER_MPS;
 
-            double calculatedAcceleration = TrainMovements.getAcceleration(weight, calculatedNetForce, false);
-            assertEquals(expectedAcceleration, calculatedAcceleration, 0.0001);
+        double positionUS_2 = getDistanceAfterOneSecond(positionUS_1, speedUS_1, accelerationUS, false); // 0.00124 miles
+        assertEquals(2.0 / METERS_PER_MILE, positionUS_2, 0.00001);
+        double speedUS_2 = speedSI_2 * MPH_PER_MPS;
 
-            speed += calculatedAcceleration; // after constant net force applied for 1 second
-        }
+        double positionUS_3 = getDistanceAfterOneSecond(positionUS_2, speedUS_2, accelerationUS, false); // miles
+        assertEquals(4.5 / METERS_PER_MILE, positionUS_3, 0.00001);
+    }
 
-        double expectedSpeed = 1.692 * TrainMovements.MPH_PER_MPS;
-        assertEquals(expectedSpeed, speed, 0.001);
+    @Test
+    public void testSpeedAfterOneSecond() {
+        double forceSI = 100; // force of 100 Newton
+        double weightSI = 100 * G_SI; // weight of 100 kg = 980.66 Newtons
+        double accelerationSI = getAcceleration(forceSI, weightSI, true); // 1.0 MPS/s
+
+        double calculatedNewSpeedSI_0 = getSpeedAfterOneSecond(0, accelerationSI);
+        assertEquals(1, calculatedNewSpeedSI_0, 0.00001);
+
+        double calculatedNewSpeedSI_1 = getSpeedAfterOneSecond(calculatedNewSpeedSI_0, accelerationSI); // 2.0 MPS
+        assertEquals(2, calculatedNewSpeedSI_1, 0.00001);
+
+        double calculatedNewSpeedSI_2 = getSpeedAfterOneSecond(calculatedNewSpeedSI_1, accelerationSI); // 3.0 MPS
+        assertEquals(3, calculatedNewSpeedSI_2, 0.00001);
+
+        double forceUS = forceSI / NEWTONS_PER_TON; // force of 1 Newton in US tons
+        double weightUS = weightSI / NEWTONS_PER_TON; // force of 1 Newton in US tons
+        double accelerationUS = getAcceleration(forceUS, weightUS, false); // 2.237 MPH/s
+
+        double calculatedNewSpeedUS_0 = getSpeedAfterOneSecond(0, accelerationUS); // 2.237 MPH
+        assertEquals(1 * MPH_PER_MPS, calculatedNewSpeedUS_0, 0.0005);
+
+        // MPH
+        double calculatedNewSpeedUS_1 = getSpeedAfterOneSecond(calculatedNewSpeedUS_0, accelerationUS); // 4.474 MPH
+        assertEquals(2 * MPH_PER_MPS, calculatedNewSpeedUS_1, 0.0005);
+
+        // MPH
+        double calculatedNewSpeedUS_2 = getSpeedAfterOneSecond(calculatedNewSpeedUS_1, accelerationUS); // 6.711 MPH
+        assertEquals(3 * MPH_PER_MPS, calculatedNewSpeedUS_2, 0.0005);
     }
 
     @Test
     public void testRollingResistance() {
-        double expectedLbsAtRest = 368.0;
-        double expectedLbsAtSpeed = 1552.0;
+        double dragLbsAtRest = 368.0;
+        double speedMPH = 40;
+        double dragLbsAtSpeed = 1552.5;
 
-        double engineTonWeight = 115.0;
-        double engineWeightNewtons = engineTonWeight * TrainMovements.NEWTONS_PER_TON;
+        double weightTons = 115.0;
 
-        double expectedTonsAtRest = expectedLbsAtRest / TrainMovements.LBS_PER_TON;
-        double calculatedTonsAtRest = TrainMovements.getRollingResistance(engineTonWeight, 0, false);
-        assertEquals(expectedTonsAtRest, calculatedTonsAtRest, 0.00001);
+        double expectedTonsAtRest = dragLbsAtRest / LBS_PER_TON; // 0.184 tons
+        assertEquals(expectedTonsAtRest, getRollingResistance(weightTons, 0, false), 0.00001);
 
-        double expectedNewtonsAtRest = expectedLbsAtRest * TrainMovements.NEWTONS_PER_LB;
-        double calculatedNewtons = TrainMovements.getRollingResistance(engineWeightNewtons, 0, true);
-        assertEquals(expectedNewtonsAtRest, calculatedNewtons, 0.1);
+        double expectedTonsAtSpeed = dragLbsAtSpeed / LBS_PER_TON; // 0.776 tons
+        assertEquals(expectedTonsAtSpeed, getRollingResistance(weightTons, speedMPH, false), 0.0005);
 
-        double expectedTonsAtSpeed = expectedLbsAtSpeed / TrainMovements.LBS_PER_TON;
-        double calculatedTonsAtSpeed = TrainMovements.getRollingResistance(engineTonWeight, 40, false);
-        assertEquals(expectedTonsAtSpeed, calculatedTonsAtSpeed, 0.0005);
+        double engineWeightNewtons = weightTons * NEWTONS_PER_TON; // 102,3091 Newtons
+
+        double expectedNewtonsAtRest = dragLbsAtRest * NEWTONS_PER_LB; // 1636.9 Newtons
+        assertEquals(expectedNewtonsAtRest, getRollingResistance(engineWeightNewtons, 0, true), 0.1);
+
+        double expectedNewtonsAtSpeed = dragLbsAtSpeed * NEWTONS_PER_LB; // 6903.7 Newtons
+        double rollingResistance = getRollingResistance(engineWeightNewtons, speedMPH / MPH_PER_MPS, true);
+        assertEquals(expectedNewtonsAtSpeed, rollingResistance, 0.1);
     }
 
     @Test
@@ -145,7 +166,7 @@ class TrainMovementsTest {
         int speedKmPerHour = 15;
 
         double expectedTractiveEffortNewtons = 190800;
-        double calculatedTractiveEffortNewtons = TrainMovements.getStandardTractiveForce(trainHp, speedKmPerHour);
+        double calculatedTractiveEffortNewtons = getStandardTractiveForce(trainHp, speedKmPerHour);
         assertEquals(expectedTractiveEffortNewtons, calculatedTractiveEffortNewtons, 0.01); // Newtons
     }
 
@@ -157,38 +178,51 @@ class TrainMovementsTest {
         double expectedColdRoller = 15;
         double expectedWarmRoller = 5;
 
-        assertEquals(expectedColdJournal, TrainMovements.getStartingResistance(weight, true, false));
-        assertEquals(expectedWarmJournal, TrainMovements.getStartingResistance(weight, true, true));
-        assertEquals(expectedColdRoller, TrainMovements.getStartingResistance(weight, false, false));
-        assertEquals(expectedWarmRoller, TrainMovements.getStartingResistance(weight, false, true));
+        assertEquals(expectedColdJournal, getStartingResistance(weight, true, false));
+        assertEquals(expectedWarmJournal, getStartingResistance(weight, true, true));
+        assertEquals(expectedColdRoller, getStartingResistance(weight, false, false));
+        assertEquals(expectedWarmRoller, getStartingResistance(weight, false, true));
     }
 
     @Test
     public void testTractionLimitForce() {
         double driverWeight = 100;
         double expectedTractionLimit = 25;
-        assertEquals(expectedTractionLimit, TrainMovements.getTractionLimitForce(driverWeight));
+        assertEquals(expectedTractionLimit, getTractionLimitForce(driverWeight));
     }
 
     @Test
     public void testTractiveEffort() {
-        double trainHp = 1500; // e.g. the F7
-        int speedKmPerHour = 15;
-        {
-            double speedMps = speedKmPerHour * TrainMovements.MPS_PER_KMPH; // 15 km/hr to 4.166667 mps
-            double trainWatts = trainHp * TrainMovements.WATTS_PER_HP;
+        double trainHp = 1500.0; // e.g. the F7
+        double speedKmPerHour = 15.0;
 
-            double expectedTractiveEffortNewtons = 190800;
-            double calculatedTractiveEffortNewtons = TrainMovements.getTractiveEffort(trainWatts, speedMps, true);
-            assertEquals(expectedTractiveEffortNewtons, calculatedTractiveEffortNewtons, 0.01); // Newtons
-        }
-        {
-            double speedMph = speedKmPerHour * TrainMovements.MPS_PER_KMPH / MPH_TO_MPS;
+        double trainWatts = trainHp * WATTS_PER_HP; // 1,118,550 watts
+        double speedMps = speedKmPerHour * MPS_PER_KMPH; // 4.1667 MPS
 
-            double expectedTractiveEffortTons = 190800 / TrainMovements.NEWTONS_PER_TON;
-            double calculatedTractiveEffortTons = TrainMovements.getTractiveEffort(trainHp, speedMph, false);
-            assertEquals(expectedTractiveEffortTons, calculatedTractiveEffortTons, 0.0001); // tons
-        }
+        double expectedTractiveEffortNewtons = 190800;
+        double calculatedTractiveEffortNewtons = getTractiveEffort(trainWatts, speedMps, true);
+        assertEquals(expectedTractiveEffortNewtons, calculatedTractiveEffortNewtons, 0.01); // Newtons
+
+        double speedUS = speedKmPerHour * MILES_PER_KM; // 9.321 MPH
+
+        double expectedTractiveEffortTons = 190800 / NEWTONS_PER_TON; // 21.45 tons
+        double calculatedTractiveEffortTons = getTractiveEffort(trainHp, speedUS, false);
+        assertEquals(expectedTractiveEffortTons, calculatedTractiveEffortTons, 0.0001); // tons
     }
 
+    @Test
+    public void testTimeDistanceList() {
+        boolean sI = false;
+        double power = 1500.0; // HP, e.g. the F7
+        double speedLimit = 40; // MPS
+        double driverWeight = 60; // tons
+        double totalWeight = 300; // tons
+        double gradePercent = 0;
+        boolean journalBearing = false;
+        boolean aboveFreezing = true;
+
+        List<Double> timeDistanceList = getTimeDistanceList(power, speedLimit, driverWeight, totalWeight, gradePercent, journalBearing, aboveFreezing, sI);
+        assertTrue(timeDistanceList.size() > 0);
+        assertEquals(0.442632, timeDistanceList.get(timeDistanceList.size() - 1), 0.000001);
+    }
 }
