@@ -40,7 +40,8 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     protected boolean _pickups = true; // when true pick-ups allowed at this location
     protected int _sequenceNum = 0; // used to determine location order in a route
     protected double _grade = 0; // maximum grade between locations
-    protected double _speedLimit = 40; // maximum train speed between locations
+    protected int _speedLimit = 40; // maximum train speed between locations
+    protected int _distance = 10; // transport distance between locations
     protected int _transportFee = 20; // transport fee per car between locations
     protected int _wait = 0; // wait time at this location
     protected String _departureTime = NONE; // departure time from this location
@@ -372,6 +373,18 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
         return time[1];
     }
 
+    public int getDistance() {
+        return _distance;
+    }
+
+    public void setDistance(int distance) {
+        int oldDistance = _distance;
+        this._distance = distance;
+        if (oldDistance != distance) {
+            setDirtyAndFirePropertyChange("distance", Integer.toString(oldDistance), Integer.toString(distance)); // NOI18N
+        }
+    }
+
     public String getFormatedDepartureTime() {
         if (getDepartureTime().equals(NONE) || !Setup.is12hrFormatEnabled()) {
             return _departureTime;
@@ -404,15 +417,15 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     }
 
     @SuppressFBWarnings(value = "FE_FLOATING_POINT_EQUALITY", justification = "firing property change doesn't matter")
-    public void setSpeedLimit(double speedLimit) {
-        double old = _speedLimit;
+    public void setSpeedLimit(int speedLimit) {
+        int old = _speedLimit;
         _speedLimit = speedLimit;
         if (old != speedLimit) {
-            setDirtyAndFirePropertyChange("speedLimit", Double.toString(old), Double.toString(speedLimit)); // NOI18N
+            setDirtyAndFirePropertyChange("speedLimit", Integer.toString(old), Integer.toString(speedLimit)); // NOI18N
         }
     }
 
-    public double getSpeedLimit() {
+    public int getSpeedLimit() {
         return _speedLimit;
     }
 

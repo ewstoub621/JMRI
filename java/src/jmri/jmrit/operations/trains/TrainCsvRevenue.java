@@ -5,7 +5,7 @@ import jmri.jmrit.operations.rollingstock.cars.Car;
 import jmri.jmrit.operations.rollingstock.cars.CarManager;
 import jmri.jmrit.operations.rollingstock.cars.CarRevenue;
 import jmri.jmrit.operations.setup.Setup;
-import jmri.jmrit.operations.setup.TrainRevenues;
+import jmri.jmrit.operations.trains.TrainRevenues;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 

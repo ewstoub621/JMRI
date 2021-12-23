@@ -14,7 +14,7 @@ import java.util.Locale;
 import javax.annotation.Nonnull;
 import javax.swing.JOptionPane;
 
-import jmri.jmrit.operations.setup.TrainRevenues;
+import jmri.jmrit.operations.trains.TrainRevenues;
 import org.jdom2.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

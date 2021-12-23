@@ -1,4 +1,4 @@
-package jmri.jmrit.operations.setup;
+package jmri.jmrit.operations.trains;
 
 import jmri.InstanceManager;
 import jmri.jmrit.operations.locations.Location;
@@ -12,10 +12,7 @@ import jmri.jmrit.operations.rollingstock.cars.CarRevenue;
 import jmri.jmrit.operations.rollingstock.engines.Engine;
 import jmri.jmrit.operations.rollingstock.engines.EngineManager;
 import jmri.jmrit.operations.routes.RouteLocation;
-import jmri.jmrit.operations.trains.Train;
-import jmri.jmrit.operations.trains.TrainCommon;
-import jmri.jmrit.operations.trains.TrainCsvRevenue;
-import jmri.jmrit.operations.trains.TrainManagerXml;
+import jmri.jmrit.operations.setup.Setup;
 
 import java.io.*;
 import java.math.BigDecimal;
@@ -30,29 +27,36 @@ import java.util.function.Function;
 public class TrainRevenues implements Serializable {
     public static final int ORIG = 0;
     public static final int TERM = 1;
+
     private static final long serialVersionUID = 4L;
 
     private final Map<String, Map<String, CarRevenue>> carRevenueMapByCarId = new TreeMap<>();
     private final Map<String, Map<String, Integer>> spurCapacityMapByCustomer = new HashMap<>();
     private final Set<String> carIdsInDemur = new TreeSet<>();
     private final Set<String> carIdsInMulctSet = new TreeSet<>();
+    // these maps, keyed by RouteLocation ids, are updated after each move until the train is terminated
+    private final Map<String, Integer> trainCarCount = new HashMap<>();
+    private final Map<String, Double> trainEngineDriverWeight = new HashMap<>();
+    private final Map<String, Integer> trainEngineHP = new HashMap<>();
+    private final Map<String, String> trainEngineModel = new HashMap<>();
+    private final Map<String, String> trainEngineType = new HashMap<>();
+    private final Map<String, Integer> trainEngineWeight = new HashMap<>();
+    private final Map<String, Integer> trainTotalWeightTons = new HashMap<>();
+    private final Map<String, List<Integer>> trainCarWeights = new HashMap<>();
 
     private transient Train train;
     private Map<String, String[]> origTrackIdsByCarId;
     private BigDecimal maxRouteTransportFee = BigDecimal.ZERO;
 
-    // these maps are updated after each move until the train is terminated
-    private final Map<String, Double> gradePercent = new HashMap<>();
-    private final Map<String, Integer> trainHp = new HashMap<>();
-    private final Map<String, String> engineModel = new HashMap<>();
-    private final Map<String, Integer> trainCarsTons = new HashMap<>();
-    private final Map<String, Integer> trainTonWeight = new HashMap<>();
-    private final Map<String, Integer> travelMinutes = new HashMap<>();
-    private final Map<String, Double> trainStartingForce = new HashMap<>();
-    private final Map<String, Integer> trainAxles = new HashMap<>();
-
     public TrainRevenues(Train train) {
         this.train = train;
+    }
+
+    public static void deleteTrainRevenuesSerFile(Train train) {
+        File trainRevenuesSerFile = getTrainRevenuesSerFile(train);
+        if (trainRevenuesSerFile.exists()) {
+            trainRevenuesSerFile.delete();
+        }
     }
 
     public static String getCustomer(Car car) {
@@ -111,17 +115,36 @@ public class TrainRevenues implements Serializable {
         return InstanceManager.getDefault(TrainManagerXml.class).getTrainRevenuesSerFile(train);
     }
 
-    public static void deleteTrainRevenuesSerFile(Train train) {
-        File trainRevenuesSerFile = getTrainRevenuesSerFile(train);
-        if (trainRevenuesSerFile.exists()) {
-            trainRevenuesSerFile.delete();
-        }
-    }
-
     public static List<Car> sortCars(List<Car> cars) {
         cars.sort(Comparator.comparing((Function<Car, String>) RollingStock::getRoadName).thenComparing(RollingStock::getNumber));
 
         return cars;
+    }
+
+    public Map<String, Integer> getTrainCarCount() {
+        return trainCarCount;
+    }
+
+    public Map<String, List<Integer>> getTrainCarWeights() { return trainCarWeights; }
+
+    public Map<String, Double> getTrainEngineDriverWeight() { return trainEngineDriverWeight; }
+
+    public Map<String, Integer> getTrainEngineHP() {
+        return trainEngineHP;
+    }
+
+    public Map<String, String> getTrainEngineModel() {
+        return trainEngineModel;
+    }
+
+    public Map<String, String> getTrainEngineType() {
+        return trainEngineType;
+    }
+
+    public Map<String, Integer> getTrainEngineWeight() { return trainEngineWeight; }
+
+    public Map<String, Integer> getTrainTotalWeight() {
+        return trainTotalWeightTons;
     }
 
     public Train getTrain() {
@@ -186,7 +209,7 @@ public class TrainRevenues implements Serializable {
         updateDemurCharges(rl);
         updateMulctCharges();
         updateTrainCharges(rl);
-        updateTrainMovementData(rl);
+        updateRouteLocationData(rl);
 
         if (rl != train.getTrainTerminatesRouteLocation()) {
             maxRouteTransportFee = maxRouteTransportFee.add(BigDecimal.valueOf(rl.getTransportFee()));
@@ -194,7 +217,7 @@ public class TrainRevenues implements Serializable {
         saveTrainRevenuesSerFile();
     }
 
-    private CarRevenue getCarRevenue(Car car) {
+    private CarRevenue carRevenue(Car car) {
         String carId = car.getId();
         Map<String, CarRevenue> map = carRevenueMapByCarId.computeIfAbsent(carId, k -> new TreeMap<>());
         String customer = getCustomer(car);
@@ -205,7 +228,7 @@ public class TrainRevenues implements Serializable {
         }
     }
 
-    private BigDecimal getSwitchingChargeByLoadAndType(Car car) {
+    private BigDecimal switchingChargeByLoadAndType(Car car) {
         String loadName = car.getLoadName();
         String defaultEmptyName = CarRevenue.getDefaultEmptyName();
         if (defaultEmptyName.equals(loadName)) {
@@ -303,13 +326,13 @@ public class TrainRevenues implements Serializable {
         }
     }
 
-    private void setHazardFeeCharges(Car car, CarRevenue carRevenue) {
+    private void hazardFeeCharges(Car car, CarRevenue carRevenue) {
         if (!CarLoad.LOAD_TYPE_EMPTY.equals(car.getLoadType()) && car.isHazardous()) {
             carRevenue.setHazardFeeCharges(BigDecimal.valueOf(Integer.parseInt(Setup.getHazardFee())));
         }
     }
 
-    private void setTransportCharges(Car car, CarRevenue carRevenue) {
+    private void transportCharges(Car car, CarRevenue carRevenue) {
         RouteLocation carRouteLocation = car.getRouteLocation();
         RouteLocation carRouteDestination = car.getRouteDestination();
 
@@ -343,17 +366,17 @@ public class TrainRevenues implements Serializable {
         }
     }
 
-    private void setSwitchingCharges(Car car, CarRevenue carRevenue) {
+    private void switchingCharges(Car car, CarRevenue carRevenue) {
         Track currentTrack = car.getTrack();
         Track destinyTrack = car.getDestinationTrack();
         boolean currentTrackIsSpur = currentTrack != null && currentTrack.isSpur();
         boolean destinyTrackIsSpur = destinyTrack != null && destinyTrack.isSpur();
         if (currentTrackIsSpur || destinyTrackIsSpur) {
-            carRevenue.setSwitchingCharges(getSwitchingChargeByLoadAndType(car));
+            carRevenue.setSwitchingCharges(switchingChargeByLoadAndType(car));
         }
     }
 
-    private List<Car> getCarsOnTracks(Location location) {
+    private List<Car> carsOnTracks(Location location) {
         List<Car> cars = new ArrayList<>();
 
         List<Track> tracksList = location.getTracksList();
@@ -370,7 +393,7 @@ public class TrainRevenues implements Serializable {
         if (rl == null || rl.getLocation() == null) {
             return;
         }
-        for (Car car : getCarsOnTracks(rl.getLocation())) {
+        for (Car car : carsOnTracks(rl.getLocation())) {
             String carId = car.getId();
             if (!car.isCaboose() && !car.isPassenger() && !carIdsInDemur.contains(carId)) {
                 Track carTrack = car.getTrack();
@@ -451,11 +474,11 @@ public class TrainRevenues implements Serializable {
     private void updateTrainCharges(RouteLocation rl) {
         for (Car car : InstanceManager.getDefault(CarManager.class).getList(train)) {
             if (!car.isCaboose() && !car.isPassenger()) {
-                CarRevenue carRevenue = getCarRevenue(car);
+                CarRevenue carRevenue = carRevenue(car);
                 if (carRevenue != null) {
-                    setHazardFeeCharges(car, carRevenue);
-                    setSwitchingCharges(car, carRevenue);
-                    setTransportCharges(car, carRevenue);
+                    hazardFeeCharges(car, carRevenue);
+                    switchingCharges(car, carRevenue);
+                    transportCharges(car, carRevenue);
                     if (isSpurPickUp(car, rl) && !Boolean.TRUE.equals(carRevenue.isPickup())) {
                         carRevenue.setPickup(true);
                         carRevenue.setLoadName(car.getLoadName()); // car load name is mutable
@@ -469,89 +492,72 @@ public class TrainRevenues implements Serializable {
         }
     }
 
-    public Map<String, Double> getGradePercent() { return gradePercent; }
-    public Map<String, Integer> getTrainHp() { return trainHp; }
-    public Map<String, String> getEngineModel() { return engineModel; }
-    public Map<String, Integer> getTrainCarsTons() { return trainCarsTons; }
-    public Map<String, Double> getTrainStartingForce() { return trainStartingForce; }
-    public Map<String, Integer> getTrainTonWeight() { return trainTonWeight; }
-    public Map<String, Integer> getTravelMinutes() { return travelMinutes; }
-    public Map<String, Integer> getTrainAxles() { return trainAxles; }
-
-    private void updateTrainMovementData(RouteLocation rl) {
-        gradePercent.put(rl.getId(), rl.getGrade());
-        trainHp.put(rl.getId(), this.getEngineHp(rl));
-        engineModel.put(rl.getId(), this.getEngineModel(rl));
-        trainCarsTons.put(rl.getId(), this.getTrainCarsWeight(rl));
-        trainTonWeight.put(rl.getId(), train.getTrainWeight());
-        travelMinutes.put(rl.getId(), Setup.getTravelTime() + rl.getWait());
-        trainStartingForce.put(rl.getId(), getEnginesStartingForce(rl));
-        trainAxles.put(rl.getId(), this.getTrainAxles(rl));
-    }
-
-    private int getTrainAxles(RouteLocation rl) {
-        int axles = 0;
-
-        for (Engine engine : InstanceManager.getDefault(EngineManager.class).getList(train)) {
-            if (engine.getRouteLocation() == rl) { axles += "Diesel".equals(engine.getTypeName()) ? 6 : 8; }
-            if (engine.getRouteDestination() == rl) { axles -= "Diesel".equals(engine.getTypeName()) ? 6 : 8; }
-        }
-        for (Car rs : InstanceManager.getDefault(CarManager.class).getList(train)) {
-            if (rs.getRouteLocation() == rl) { axles += 4; }
-            if (rs.getRouteDestination() == rl) { axles -= 4; }
-        }
-
-        return axles;
-    }
-
-    private int getEngineHp(RouteLocation rl) {
-        int hp = 0;
-        for (Engine engine : InstanceManager.getDefault(EngineManager.class).getList(train)) {
-            if (engine.getRouteLocation() == rl) { hp += engine.getHpInteger(); }
-            if (engine.getRouteDestination() == rl) { hp -= engine.getHpInteger(); }
-        }
-        return hp;
-    }
-
-    private String getEngineModel(RouteLocation rl) {
-        String model = "";
+    private void updateRouteLocationData(RouteLocation rl) {
+        trainCarCount.put(rl.getId(), train.getNumberCarsInTrain(rl));
+        StringBuilder engineModel = new StringBuilder();
+        StringBuilder engineType = new StringBuilder();
         for (Engine engine : InstanceManager.getDefault(EngineManager.class).getList(train)) {
             if (engine.getRouteLocation() == rl && engine.getRouteDestination() != rl) {
-                if (model.isEmpty()) {
-                    model = engine.getModel();
+                if (engineModel.length() == 0) {
+                    engineModel = new StringBuilder(engine.getModel());
                 } else {
-                    model += "; " + engine.getModel();
+                    engineModel.append(" + ").append(engine.getModel());
                 }
+
+                if (engineType.length() == 0) {
+                    engineType = new StringBuilder(engine.getTypeName());
+                } else {
+                    engineType.append(" + ").append(engine.getTypeName());
+                }
+
+                int engineWeightTons = engine.getAdjustedWeightTons();
+                trainEngineWeight.merge(rl.getId(), engineWeightTons, Integer::sum);
+                // TODO EWS add actual driver weight data for accurate tractive force calculations
+                String engineTypeName = engine.getTypeName();
+                boolean steamType = engineTypeName != null && (engineTypeName.contains("Steam"));
+                double driverWeight = (steamType ? TrainPhysics.STEAMER_DRIVER_TO_ENGINE_WEIGHT_RATIO : 1) * engineWeightTons;
+                trainEngineDriverWeight.merge(rl.getId(), driverWeight, Double::sum);
+
+                List<Integer> carWeights = trainCarWeights(rl);
+                trainCarWeights.put(rl.getId(), carWeights);
+                int trainCarsWeight = 0;
+                for (int w : carWeights) { trainCarsWeight += w; }
+                Integer totalWeight = trainTotalWeightTons.get(rl.getId());
+                if (totalWeight == null) {
+                    trainTotalWeightTons.put(rl.getId(), trainCarsWeight + engineWeightTons);
+                } else {
+                    trainTotalWeightTons.put(rl.getId(), trainCarsWeight + engineWeightTons + totalWeight);
+                }
+
+                int engineHp = engine.getHpInteger();
+                trainEngineHP.merge(rl.getId(), engineHp, Integer::sum);
             }
         }
-        return model;
-    }
-
-    private double getEnginesStartingForce(RouteLocation rl) {
-        double tf = 0;
-
-        for (Engine engine : InstanceManager.getDefault(EngineManager.class).getList(train)) {
-            double adhesion = "Diesel".equals(engine.getTypeName()) ? 0.25 : 0.15;
-            int weightTons = engine.getAdjustedWeightTons();
-            double traction = adhesion * weightTons;
-
-            if (engine.getRouteLocation() == rl) {
-                tf += traction;
-            }
-            if (engine.getRouteDestination() == rl) {
-                tf -= traction;
-            }
+        if (trainEngineModel.get(rl.getId()) == null) {
+            trainEngineModel.put(rl.getId(), engineModel.toString());
+        } else {
+            trainEngineModel.put(rl.getId(), engineModel + " + " + trainEngineModel.get(rl.getId()));
         }
-        return tf;
+        if (trainEngineType.get(rl.getId()) == null) {
+            trainEngineType.put(rl.getId(), engineType.toString());
+        } else {
+            trainEngineType.put(rl.getId(), engineType + " + " + trainEngineType.get(rl.getId()));
+        }
     }
 
-    private int getTrainCarsWeight(RouteLocation rl) {
-        int weight = 0;
+    private List<Integer> trainCarWeights(RouteLocation rl) {
+        List<Integer> carWeights = new ArrayList<>();
         for (Car rs : InstanceManager.getDefault(CarManager.class).getList(train)) {
-            if (rs.getRouteLocation() == rl) { weight += rs.getAdjustedWeightTons(); }
-            if (rs.getRouteDestination() == rl) { weight -= rs.getAdjustedWeightTons(); }
+            int carWeight = 0;
+            if (rs.getRouteLocation() == rl) {
+                carWeight += rs.getAdjustedWeightTons();
+            }
+            if (rs.getRouteDestination() == rl) {
+                carWeight -= rs.getAdjustedWeightTons();
+            }
+            carWeights.add(carWeight);
         }
-        return weight;
+        return carWeights;
     }
 
 }
