@@ -14,7 +14,6 @@ import java.util.Locale;
 import javax.annotation.Nonnull;
 import javax.swing.JOptionPane;
 
-import jmri.jmrit.operations.trains.TrainRevenues;
 import org.jdom2.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -3121,7 +3120,7 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         RouteLocation rl = getCurrentRouteLocation();
         RouteLocation rlNext = getNextRouteLocation(rl);
         if (Setup.isSaveTrainRevenuesEnabled()) {
-            getTrainRevenues().updateCarRevenues(rl);
+            getTrainRevenues().updateCarRevenues(rl, rlNext);
         }
 
         setCurrentLocation(rlNext);
@@ -3130,7 +3129,7 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         setDirtyAndFirePropertyChange(TRAIN_LOCATION_CHANGED_PROPERTY, rl, rlNext);
         moveTrainIcon(rlNext);
         updateStatus(rl, rlNext);
-        // tell GUI that train has complete its move
+        // tell GUI that train has completed its moves
         setDirtyAndFirePropertyChange(TRAIN_MOVE_COMPLETE_CHANGED_PROPERTY, rl, rlNext);
         if (!this.isBuilt() && Setup.isSaveTrainRevenuesEnabled()) {
             try {

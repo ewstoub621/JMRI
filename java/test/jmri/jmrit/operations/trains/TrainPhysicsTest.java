@@ -1,6 +1,9 @@
 package jmri.jmrit.operations.trains;
 
+import jmri.InstanceManager;
 import jmri.jmrit.operations.locations.Location;
+import jmri.jmrit.operations.rollingstock.engines.Engine;
+import jmri.jmrit.operations.rollingstock.engines.EngineManager;
 import jmri.jmrit.operations.routes.Route;
 import jmri.jmrit.operations.routes.RouteLocation;
 import jmri.jmrit.operations.setup.Setup;
@@ -8,8 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
-import static jmri.jmrit.operations.trains.TrainMotion.getMotionsHeader;
-import static jmri.jmrit.operations.trains.TrainMotionParams.getMotionParamsHeader;
 import static jmri.jmrit.operations.trains.TrainPhysics.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -33,6 +34,41 @@ class TrainPhysicsTest {
         double expectedAccelerationUS = expectedAccelerationSI * MPH_PER_MPS; // 2.2369 MPH, per second
         double calculatedAccelerationUS = getAcceleration(forceUS, weightUS);
         assertEquals(expectedAccelerationUS, calculatedAccelerationUS, 0.001);
+    }
+
+    @Test
+    public void testGetNewSpeedTrainMotion() {
+        List<Integer> carWeights = buildCarWeights(10);
+        int driverWeight = 115;
+        int engineWeight = 115;
+        int fullPower = 1350;
+        int gradePercent = 1;
+        double distance = 10;
+        TrainMotion tm =TrainMotion.ZERO;
+        double distanceLimit;
+        int steps = 19;
+
+        System.out.println(TrainMotion.getMotionsHeader());
+        for (int i = 0; i < steps; i++) {
+            distanceLimit = distance - tm.x;
+            double newSpeed  = i + 1;
+            tm = getNewTrainMotion(tm, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
+            System.out.println(tm.getRawMotionData());
+            assertNotNull(tm);
+            assertEquals(newSpeed, tm.v);
+        }
+        double accelTime = tm.t;
+        for (int i = 1; i <= steps; i++) {
+            distanceLimit = distance - tm.x;
+            double newSpeed  = steps - i;
+            tm = getNewTrainMotion(tm, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
+            System.out.println(tm.getRawMotionData());
+            assertNotNull(tm);
+            assertEquals(newSpeed, tm.v);
+        }
+        assertEquals(0, tm.v);
+        System.out.println("acceleration elapsed time = " + accelTime);
+        System.out.println("deceleration elapsed time = " + (tm.t - accelTime));
     }
 
     @Test
@@ -65,6 +101,9 @@ class TrainPhysicsTest {
 
     @Test
     public void testMotions() throws Exception {
+        int cars = 10;
+        int grade = 1;
+
         Train train = new Train("1", "TM");
         Route route = new Route("1", "Route1");
         train.setRoute(route);
@@ -74,7 +113,7 @@ class TrainPhysicsTest {
 
         RouteLocation rl1 = new RouteLocation("1r1", loc1);
         rl1.setDistance(10);
-        rl1.setGrade(3);
+        rl1.setGrade(grade);
         rl1.setSpeedLimit(40);
         rl1.setSequenceNumber(1);
         route.register(rl1);
@@ -89,18 +128,28 @@ class TrainPhysicsTest {
         TrainRevenues trainRevenues = new TrainRevenues(train);
         train.setTrainRevenues(trainRevenues);
 
-        ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(25, 75, 25, 75, 25, 75, 25, 75, 25, 75, 25, 75, 25));
+        List<Integer> carWeights = buildCarWeights(cars);
         trainRevenues.getTrainCarWeights().put("1r1", carWeights);
-        trainRevenues.getTrainCarCount().put("1r1", carWeights.size());
-        trainRevenues.getTrainEngineDriverWeight().put("1r1", STEAMER_DRIVER_TO_ENGINE_WEIGHT_RATIO * 364.0);
-        trainRevenues.getTrainEngineHP().put("1r1", 4500);
-        trainRevenues.getTrainEngineModel().put("1r1", "S-2 2-8-4");
-        trainRevenues.getTrainEngineType().put("1r1", "Steam");
-        trainRevenues.getTrainEngineWeight().put("1r1", 364);
-        trainRevenues.getTrainTotalWeight().put("1r1", 989);
 
-        TrainPhysics movements = new TrainPhysics(train);
-        System.out.println("testMotions:\n" + movements);
+        Engine engine = new Engine("NPK", "123");
+        engine.setModel("FT");
+        engine.setTypeName("Diesel");
+        InstanceManager.getDefault(EngineManager.class).register(engine);
+        trainRevenues.getTrainEngines().put("1r1", new ArrayList<>());
+        trainRevenues.getTrainEngines().get("1r1").add(engine);
+
+        TrainPhysics trainPhysics = new TrainPhysics(train, true);
+        System.out.println("testMotions:\n" + trainPhysics);
+    }
+
+    private ArrayList<Integer> buildCarWeights(int cars) {
+        boolean loaded = true;
+        ArrayList<Integer> carWeights = new ArrayList<>();
+        for (int i = 0; i < cars; i++) {
+            carWeights.add(loaded ? 75 : 25);
+            loaded = !loaded;
+        }
+        return carWeights;
     }
 
     @Test
@@ -238,12 +287,15 @@ class TrainPhysicsTest {
 
     @Test
     public void testStretchMotion() {
+        double engineWeight = 728;
+        double driverWeight = STEAMER_DRIVER_TO_ENGINE_WEIGHT_RATIO * engineWeight;
         List<Integer> carWeights = Arrays.asList(75, 25, 75, 25, 75, 25, 75, 25, 75);
-        TrainMotionParams tmp = new TrainMotionParams(carWeights, 364, 0.35 * (double) 364, 4500, 3, 0, 0, true, false);
+        double fullPower = 9000;
+        double gradePercent = 2.5;
+        boolean journal = true;
+        boolean warm = false;
 
-        TrainMotion tm = getStretchMotion(tmp);
-        assertNotNull(tm);
-        System.out.println(String.format("testStretchMotion {\n\tTrainMotionParams {\n\t%s\n\t%s\n\t}\n\tStretch TrainMotion {\n\t\t%s\n\t\t%s\n\t}\n}", getMotionParamsHeader(), tmp.getMotionParamsData(), getMotionsHeader(), tm.getMotionData()));
+        assertNotNull(getStretchMotion(driverWeight, engineWeight, carWeights, fullPower, gradePercent, journal, warm));
     }
 
     @Test
@@ -274,24 +326,42 @@ class TrainPhysicsTest {
 
     @Test
     public void testTrainMotions() {
-        double speedLimit = 40; // MPS
+        Map<Integer, List<Engine>> engines = new HashMap<>();
+        engines.put(0, registerNewEngine("NKP", "500", "FT", "Diesel"));
+        engines.put(1, registerNewEngine("NKP", "501", "GP40", "Diesel"));
+        engines.put(2, registerNewEngine("NKP", "502", "GP40", "Diesel"));
+        engines.put(3, registerNewEngine("NKP", "503", "RS1", "Diesel"));
+
         Map<Integer, List<Integer>> carWeights = new HashMap<>();
         carWeights.put(0, new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25)));
         carWeights.put(1, new ArrayList<>(Arrays.asList(25, 75, 25, 75, 25, 75, 25, 75, 25, 75, 25, 75, 25)));
         carWeights.put(2, new ArrayList<>(Arrays.asList(25, 75, 25, 75, 25, 75, 25, 75, 25, 75, 25, 75, 25)));
         carWeights.put(3, new ArrayList<>(Arrays.asList(25, 75, 25, 75, 25, 25)));
-        //        double[] totalWeight = new double[]{415, 740, 989, 374}; // tons
-        double[] driverWeight = new double[]{115, 115, STEAMER_DRIVER_TO_ENGINE_WEIGHT_RATIO * 364, 124}; // tons
-        double[] engineWeight = new double[]{115, 115, 364, 124}; // tons
+
         double[] gradePercent = new double[]{-1, -2, 3, 0};
-        double[] power = new double[]{1350, 1350, 4500, 1000};
-        int[] distance = new int[]{10, 10, 10, 10};
+        int speedLimit = 40; // MPS
+        double[] distance = new double[]{10, 10, 10, 10};
+        boolean journal = true;
+        boolean warm = false;
 
         for (int i = 0; i < 4; i++) {
-            TrainMotionParams tmp = new TrainMotionParams(carWeights.get(i), engineWeight[i], driverWeight[i], power[i], gradePercent[i], speedLimit, distance[i], true, false);
-            List<TrainMotion> motionsList = getTrainMotions(tmp).get(0);
-            assertFalse(motionsList.isEmpty());
+            Map<Integer, List<TrainMotion>> trainMotionsMap = getTrainMotions(engines.get(i), carWeights.get(i), gradePercent[i], speedLimit, distance[i], journal, warm);
+            assertFalse(trainMotionsMap.isEmpty());
+            List<TrainMotion> trainMotionList = trainMotionsMap.get(0);
+            assertFalse(trainMotionList.isEmpty());
         }
+    }
+
+    private List<Engine> registerNewEngine(String road, String number, String model, String type) {
+        Engine engine = new Engine(road, number);
+        engine.setModel(model);
+        engine.setTypeName(type);
+        InstanceManager.getDefault(EngineManager.class).register(engine);
+
+        List<Engine> engines = new ArrayList<>();
+        engines.add(engine);
+
+        return engines;
     }
 
 }

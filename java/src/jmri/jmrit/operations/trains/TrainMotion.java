@@ -3,15 +3,15 @@ package jmri.jmrit.operations.trains;
 public class TrainMotion {
     static final TrainMotion ZERO = new TrainMotion();
 
-    final double dt; // seconds
-    final double t; // seconds
-    final double x; // miles
-    final double v; // mph
-    final double a; // mph/second
-    final double f; // tons
-    final double p; // horsepower
-    final double tp; // % of maximum power
-    final double bp; // % of maximum brake
+    double dt; // seconds
+    double t; // seconds
+    double x; // miles
+    double v; // mph
+    double a; // mph/second
+    double f; // tons
+    double p; // horsepower
+    double tp; // % of maximum power
+    double bp; // % of maximum brake
 
     private TrainMotion() {
         this.dt = 0;
@@ -37,7 +37,7 @@ public class TrainMotion {
         this.bp = bp;
     }
 
-    static String getFormattedTime(double seconds) {
+    static String timeString(double seconds) {
         return String.format("%02.0f:%02.0f:%02.0f", seconds / 3600, (seconds % 3600) / 60, (seconds % 60));
     }
 
@@ -47,7 +47,12 @@ public class TrainMotion {
 
     public String getMotionData() {
         return String.format("%9s,%9s,%8.4f,%7.3f,%7.3f,%7.2fT,%7.1fHP,%8.1f%%,%6.1f%%,",
-                getFormattedTime(dt), getFormattedTime(t), x, v, a, f, p, tp, bp);
+                timeString(dt), timeString(t), x, v, a, f, p, tp, bp);
+    }
+
+    public String getRawMotionData() {
+        return String.format("%9.4f,%9.3f,%8.4f,%7.3f,%7.3f,%7.2fT,%7.1fHP,%8.1f%%,%6.1f%%,",
+                dt, t, x, v, a, f, p, tp, bp);
     }
 
     @Override

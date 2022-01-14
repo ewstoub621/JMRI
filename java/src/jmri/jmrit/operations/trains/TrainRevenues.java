@@ -34,14 +34,8 @@ public class TrainRevenues implements Serializable {
     private final Map<String, Map<String, Integer>> spurCapacityMapByCustomer = new HashMap<>();
     private final Set<String> carIdsInDemur = new TreeSet<>();
     private final Set<String> carIdsInMulctSet = new TreeSet<>();
-    // these maps, keyed by RouteLocation ids, are updated after each move until the train is terminated
-    private final Map<String, Integer> trainCarCount = new HashMap<>();
-    private final Map<String, Double> trainEngineDriverWeight = new HashMap<>();
-    private final Map<String, Integer> trainEngineHP = new HashMap<>();
-    private final Map<String, String> trainEngineModel = new HashMap<>();
-    private final Map<String, String> trainEngineType = new HashMap<>();
-    private final Map<String, Integer> trainEngineWeight = new HashMap<>();
-    private final Map<String, Integer> trainTotalWeightTons = new HashMap<>();
+    private final Set<String> trainPickUpOrDropOff = new TreeSet<>();
+    private final Map<String, List<Engine>> trainEngines = new HashMap<>();
     private final Map<String, List<Integer>> trainCarWeights = new HashMap<>();
 
     private transient Train train;
@@ -121,31 +115,11 @@ public class TrainRevenues implements Serializable {
         return cars;
     }
 
-    public Map<String, Integer> getTrainCarCount() {
-        return trainCarCount;
-    }
-
     public Map<String, List<Integer>> getTrainCarWeights() { return trainCarWeights; }
 
-    public Map<String, Double> getTrainEngineDriverWeight() { return trainEngineDriverWeight; }
+    public Map<String, List<Engine>> getTrainEngines() { return trainEngines; }
 
-    public Map<String, Integer> getTrainEngineHP() {
-        return trainEngineHP;
-    }
-
-    public Map<String, String> getTrainEngineModel() {
-        return trainEngineModel;
-    }
-
-    public Map<String, String> getTrainEngineType() {
-        return trainEngineType;
-    }
-
-    public Map<String, Integer> getTrainEngineWeight() { return trainEngineWeight; }
-
-    public Map<String, Integer> getTrainTotalWeight() {
-        return trainTotalWeightTons;
-    }
+    public Set<String> getTrainPickUpsOrDropOffs() { return trainPickUpOrDropOff; }
 
     public Train getTrain() {
         return train;
@@ -201,7 +175,7 @@ public class TrainRevenues implements Serializable {
         saveTrainRevenuesSerFile();
     }
 
-    public void updateCarRevenues(RouteLocation rl) {
+    public void updateCarRevenues(RouteLocation rl, RouteLocation rlNext) {
         if (rl == null) {
             return;
         }
@@ -209,7 +183,7 @@ public class TrainRevenues implements Serializable {
         updateDemurCharges(rl);
         updateMulctCharges();
         updateTrainCharges(rl);
-        updateRouteLocationData(rl);
+        updateRouteLocationData(rl, rlNext);
 
         if (rl != train.getTrainTerminatesRouteLocation()) {
             maxRouteTransportFee = maxRouteTransportFee.add(BigDecimal.valueOf(rl.getTransportFee()));
@@ -492,56 +466,18 @@ public class TrainRevenues implements Serializable {
         }
     }
 
-    private void updateRouteLocationData(RouteLocation rl) {
-        trainCarCount.put(rl.getId(), train.getNumberCarsInTrain(rl));
-        StringBuilder engineModel = new StringBuilder();
-        StringBuilder engineType = new StringBuilder();
+    private void updateRouteLocationData(RouteLocation rl, RouteLocation rlNext) {
         for (Engine engine : InstanceManager.getDefault(EngineManager.class).getList(train)) {
             if (engine.getRouteLocation() == rl && engine.getRouteDestination() != rl) {
-                if (engineModel.length() == 0) {
-                    engineModel = new StringBuilder(engine.getModel());
-                } else {
-                    engineModel.append(" + ").append(engine.getModel());
+                if (rlNext != null) {
+                    Location location = rlNext.getLocation();
+                    if (location.getPickupRS() > 0 || location.getDropRS() > 0)
+                        trainPickUpOrDropOff.add(rl.getId());
                 }
-
-                if (engineType.length() == 0) {
-                    engineType = new StringBuilder(engine.getTypeName());
-                } else {
-                    engineType.append(" + ").append(engine.getTypeName());
-                }
-
-                int engineWeightTons = engine.getAdjustedWeightTons();
-                trainEngineWeight.merge(rl.getId(), engineWeightTons, Integer::sum);
-                // TODO EWS add actual driver weight data for accurate tractive force calculations
-                String engineTypeName = engine.getTypeName();
-                boolean steamType = engineTypeName != null && (engineTypeName.contains("Steam"));
-                double driverWeight = (steamType ? TrainPhysics.STEAMER_DRIVER_TO_ENGINE_WEIGHT_RATIO : 1) * engineWeightTons;
-                trainEngineDriverWeight.merge(rl.getId(), driverWeight, Double::sum);
-
-                List<Integer> carWeights = trainCarWeights(rl);
-                trainCarWeights.put(rl.getId(), carWeights);
-                int trainCarsWeight = 0;
-                for (int w : carWeights) { trainCarsWeight += w; }
-                Integer totalWeight = trainTotalWeightTons.get(rl.getId());
-                if (totalWeight == null) {
-                    trainTotalWeightTons.put(rl.getId(), trainCarsWeight + engineWeightTons);
-                } else {
-                    trainTotalWeightTons.put(rl.getId(), trainCarsWeight + engineWeightTons + totalWeight);
-                }
-
-                int engineHp = engine.getHpInteger();
-                trainEngineHP.merge(rl.getId(), engineHp, Integer::sum);
+                trainEngines.computeIfAbsent(rl.getId(), k -> new ArrayList<>());
+                trainEngines.get(rl.getId()).add(engine);
+                trainCarWeights.put(rl.getId(), trainCarWeights(rl));
             }
-        }
-        if (trainEngineModel.get(rl.getId()) == null) {
-            trainEngineModel.put(rl.getId(), engineModel.toString());
-        } else {
-            trainEngineModel.put(rl.getId(), engineModel + " + " + trainEngineModel.get(rl.getId()));
-        }
-        if (trainEngineType.get(rl.getId()) == null) {
-            trainEngineType.put(rl.getId(), engineType.toString());
-        } else {
-            trainEngineType.put(rl.getId(), engineType + " + " + trainEngineType.get(rl.getId()));
         }
     }
 

@@ -1,5 +1,6 @@
 package jmri.jmrit.operations.rollingstock.engines;
 
+import java.io.Serializable;
 import java.util.Hashtable;
 import java.util.Set;
 
@@ -48,7 +49,7 @@ import jmri.jmrit.operations.rollingstock.RollingStockAttribute;
  *
  * @author Daniel Boudreau Copyright (C) 2008
  */
-public class EngineModels extends RollingStockAttribute {
+public class EngineModels extends RollingStockAttribute implements Serializable {
 
     private static final String MODELS = Bundle.getMessage("engineDefaultModels");
     // Horsepower, length, and type have a one to one correspondence with the above MODELS

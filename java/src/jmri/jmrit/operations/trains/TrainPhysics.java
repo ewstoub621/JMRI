@@ -1,5 +1,6 @@
 package jmri.jmrit.operations.trains;
 
+import jmri.jmrit.operations.rollingstock.engines.Engine;
 import jmri.jmrit.operations.routes.Route;
 import jmri.jmrit.operations.routes.RouteLocation;
 import jmri.jmrit.operations.setup.Setup;
@@ -10,10 +11,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static jmri.jmrit.operations.trains.TrainMotion.getFormattedTime;
+import static jmri.jmrit.operations.trains.TrainMotion.timeString;
 
 /**
- * These calculators are mostly based on http://evilgeniustech.com/idiotsGuideToRailroadPhysics/TheBasics/
+ * These calculators are partly based on http://evilgeniustech.com/idiotsGuideToRailroadPhysics/TheBasics/
  * <p>That site is a partial reconstitution of the work of Al Krug, a.k.a. the Evil Genius, on train motion
  * physics. A second source is https://www.railelectrica.com/traction-mechanics/train-grade-curve-and-acceleration-resistance-2//p>
  *
@@ -24,25 +25,26 @@ import static jmri.jmrit.operations.trains.TrainMotion.getFormattedTime;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainPhysics implements Serializable {
-    public static final double STEAMER_DRIVER_TO_ENGINE_WEIGHT_RATIO = 0.35;
-    // constant values
+    // basic constant values
     protected static final double BRAKE_DESIGN_LIMIT = 0.75;
     protected static final double COUPLER_PULL_LIMIT_TONS = 125; // working limit for older coupler knuckles
+    protected static final double FEET_PER_MILE = 5280.0;
     protected static final double FLANGE_ADHESION_PER_KMPH = 0.00008; // steel flange sliding against steel rail face, per Kmph (speed)
     protected static final double FT_LBS_PER_SEC_PER_HP = 550;
     protected static final double G_SI = 9.80665; // gravitational acceleration in meters/sec/sec
     protected static final double G_US = 32.174; // gravitational acceleration in feet/sec/sec
-    protected static final double POWER_EFFICIENCY = 0.72; // factor especially for F7-A locomotives
-    protected static final double STATIC_ADHESION = 0.0016; // rolling steel wheel on steel rail
-    protected static final double WHEEL_TRACK_ADHESION = 0.25; // coefficient for steel wheel on sanded steel rail
-    protected static final double FEET_PER_MILE = 5280.0;
     protected static final double KG_PER_LB = 0.45359237;
     protected static final double KM_PER_METER = 1000.0;
     protected static final double LBS_PER_TON = 2000.0;
     protected static final double METERS_PER_FOOT = 0.0254 * 12.0; // 0.3048
+    protected static final double MINIMUM_ACCELERATION = 0.01;
+    protected static final double POWER_EFFICIENCY = 0.72; // factor especially for F7-A locomotives
     protected static final double SEC_PER_HOUR = 3600.0;
     protected static final double SLACK_PER_CAR_FEET = 1.8; // couplers plus drawbars
+    protected static final double STATIC_ADHESION = 0.0016; // rolling steel wheel on steel rail
+    protected static final double STEAMER_DRIVER_TO_ENGINE_WEIGHT_RATIO = 0.35;
     protected static final double WATTS_PER_HP = 745.7;
+    protected static final double WHEEL_TRACK_ADHESION = 0.25; // coefficient for steel wheel on sanded steel rail
     // derived constants and conversion factors
     protected static final double METERS_PER_MILE = FEET_PER_MILE * METERS_PER_FOOT; // ~1609.344
     protected static final double MILES_PER_KM = KM_PER_METER / METERS_PER_MILE; // ~0.621371
@@ -50,22 +52,25 @@ public class TrainPhysics implements Serializable {
     protected static final double MPS_PER_KMPH = KM_PER_METER / SEC_PER_HOUR; // ~0.277778
     protected static final double MPH_PER_FPS = SEC_PER_HOUR / FEET_PER_MILE; // ~0.681818
     protected static final double STRETCH_SPEED_LIMIT_FPS = 2.0 / MPH_PER_FPS;
+    protected static final int STRETCH_SPEED_LIMIT_MPH = 2;
     protected static final double NEWTONS_PER_LB = KG_PER_LB * G_SI;// ~4.4482
     protected static final double NEWTONS_PER_TON = NEWTONS_PER_LB * LBS_PER_TON; // ~8896.44
-
-    static final int ACCELERATE = 0;
+    static final int ACCEL = 0;
     static final int CRUISE = 1;
-    static final int DECELERATE = 2;
+    static final int DECEL = 2;
 
     private static final long serialVersionUID = 1L;
-    private static final double MINIMUM_ACCELERATION = 0.01;
     private final StringBuilder reportSummary = new StringBuilder();
+    private final Map<RouteLocation, Map<Integer, List<TrainMotion>>> motionMaps = new HashMap<>();
 
-    public TrainPhysics(Train train) {
+    public TrainPhysics(Train train, boolean detailed) {
         Route route = train.getRoute();
-        TrainRevenues trainRevenues = train.getTrainRevenues();
-        for (int i = 1; i < route.getLocationsBySequenceList().size(); i++) {
-            updateMotionReport(train, trainRevenues, route.getRouteLocationBySequenceNumber(i));
+        boolean journal = true;
+        boolean warm = false;
+
+        for (RouteLocation rl : route.getLocationsBySequenceList()) {
+            motionMaps.put(rl, getTrainMotions(train, rl, journal, warm));
+            updateMotionReport(train, rl, detailed);
         }
     }
 
@@ -133,24 +138,29 @@ public class TrainPhysics implements Serializable {
      * During deceleration, we assume that the tractive force is the available traction force for the total weight,
      * since all axles have brakes, and which does not include drawbar tension limits, since the tension or compression
      * is widely distributed. Please note that train brakes are designed to apply only 75% of the maximum braking force,
-     * since locking wheels cause significant damage to both rails and wheels.
+     * since locking wheels cause significant damage to both rails and wheels, and could cause derailment.
      * </li>
      *
      * @param fullPower    full power to accelerate motion in watts (SI) or HP
      * @param speed        speed in MPS (SI) or MPH
-     * @param trainWeight  total weight being moved tons or newtons
-     * @param driverWeight driver wheel weight load available for starting force in tons or newtons
+     * @param totalWeight  total weight being moved tons or newtons
+     * @param driverWeight driver wheels weight load available for starting force in tons or newtons
      * @param gradePercent the grade in percentage units
+     * @param accelerate   true: return net force available to accelerate, else net force available to decelerate
      * @return the calculated net force in Newtons (SI) or tons
      */
-    static double getNetForce(double fullPower, double speed, double trainWeight, double driverWeight, double gradePercent) {
-        double tractiveForceLimit = tractiveForceLimit(driverWeight);
+    static double getNetForce(double fullPower, double speed, double totalWeight, double driverWeight, double gradePercent, boolean accelerate) {
+        double tractiveForceLimit = accelerate ? tractiveForceLimit(driverWeight) : brakingForceLimit(totalWeight);
         double tractiveForce = getTractiveForce(fullPower, speed);
         double availTractiveForce = Math.min(tractiveForceLimit, tractiveForce);
-        double rollingResistance = getRollingResistance(trainWeight, speed);
-        double gradeResistance = getGradeResistance(trainWeight, gradePercent);
+        double rollingResistance = getRollingResistance(totalWeight, speed);
+        double gradeResistance = getGradeResistance(totalWeight, gradePercent);
 
-        return availTractiveForce - rollingResistance - gradeResistance;
+        if (accelerate) {
+            return availTractiveForce - rollingResistance - gradeResistance;
+        } else {
+            return availTractiveForce + rollingResistance + gradeResistance;
+        }
     }
 
     /**
@@ -190,6 +200,48 @@ public class TrainPhysics implements Serializable {
      */
     static double getNewSpeed(double speed, double acceleration) {
         return speed + acceleration;
+    }
+
+    static TrainMotion getNewTrainMotion(TrainMotion priorTrainMotion, double newSpeed, double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double distanceLimit) {
+        double carsWeight = carWeights.stream().mapToInt(w -> w).sum();
+        double totalWeight = engineWeight + carsWeight;
+        double brakingForceLimit = brakingForceLimit(totalWeight);
+
+        double t_0 = priorTrainMotion.t; // seconds
+        double x_0 = priorTrainMotion.x; // miles
+        double v_0 = priorTrainMotion.v; // MPH
+
+        double v_1 = newSpeed; // MPH
+        double d_v = v_1 - v_0;
+        double d_v_signum = Math.signum(d_v);
+        boolean accelerate = d_v_signum > 0;
+
+        double availTractiveForce = availTractiveForce(driverWeight, fullPower, totalWeight, v_0, accelerate);
+        double rollingResistance = getRollingResistance(totalWeight, v_0);
+        double gradeResistance = getGradeResistance(totalWeight, gradePercent);
+        double netForce = d_v_signum * availTractiveForce - rollingResistance - gradeResistance; // +/- tons
+        double a_x = getAcceleration(netForce, totalWeight); // +/- MPH/s
+        if (accelerate && a_x < MINIMUM_ACCELERATION) {
+            return null;
+        }
+        double dt = d_v / a_x; // seconds
+        if (dt < 0) {
+            a_x = getAcceleration(netForce, totalWeight);
+            System.out.println("dt is negative");
+        }
+        double x_1 = x_0 + (v_0 + 0.5 * d_v_signum * a_x * dt) * dt / SEC_PER_HOUR;
+        if ((float) (x_1) > (float) (distanceLimit)) {
+            return null;
+        }
+        double t_1 = t_0 + dt;
+        double appliedPower = appliedPower(fullPower, v_1, driverWeight);
+        if (accelerate) {
+            double throttle = 100 * appliedPower / fullPower;
+            return new TrainMotion(dt, t_1, x_1, v_1, a_x, netForce, appliedPower, throttle, 0);
+        } else {
+            double brake = Math.abs(100 * availTractiveForce / brakingForceLimit);
+            return new TrainMotion(dt, t_1, x_1, v_1, a_x, netForce, 0, 0, brake);
+        }
     }
 
     /**
@@ -232,21 +284,20 @@ public class TrainPhysics implements Serializable {
      * TrainMotion starting at rest with train initially bunched, to exploit Slack for possible low driver weight and/or
      * high bearing resistance, to overcome starting resistance, by stretching the train car by car.
      *
-     * @param tmp TrainMotionParams
-     * @return TrainMotion representing complete stretch period for starting train motion
+     * @param driverWeight driver wheels weight load available for applied force in Newtons (SI) or tons
+     * @param engineWeight engine weight including possible tender
+     * @param carWeights   ordered list of all car weights in this train
+     * @param fullPower    full power to accelerate motion in watts (SI) or HP
+     * @param gradePercent the grade in percentage units
+     * @param journal      type of bearing: false for roller, true for journal
+     * @param warm         bearing temp: false for below freezing, true for above freezing
+     * @return TrainMotion convering the entire time interval to stretch this train's coupler assemblies
      */
-    static TrainMotion getStretchMotion(TrainMotionParams tmp) {
-        double fullPower = tmp.fullPower;
-        double driverWeight = tmp.driverWeight;
-        double totalWeight = tmp.trainWeight;
-        double gradePercent = tmp.gradePercent;
-
-        if (getNetForce(fullPower, STRETCH_SPEED_LIMIT_FPS * MPH_PER_FPS, totalWeight, driverWeight, gradePercent) < 0) {
+    static TrainMotion getStretchMotion(double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, boolean journal, boolean warm) {
+        double totalWeight = engineWeight + carWeights.stream().mapToInt(w -> w).sum();
+        if (getNetForce(fullPower, STRETCH_SPEED_LIMIT_FPS * MPH_PER_FPS, totalWeight, driverWeight, gradePercent, true) < 0) {
             return TrainMotion.ZERO;
         }
-        double engineWeight = tmp.engineWeight;
-        boolean journal = tmp.journal;
-        boolean warm = tmp.warm;
 
         double f = netForceAtRest(engineWeight, driverWeight, journal, warm, gradePercent);
         double stretchedWeight = engineWeight; // initial weight to pull
@@ -262,10 +313,10 @@ public class TrainPhysics implements Serializable {
         double dt = 0;
         double m;
         // add each car to stretch
-        for (double carWeight : tmp.carWeights) {
+        for (double carWeight : carWeights) {
             double newStretchedWeight = stretchedWeight + carWeight;
             v *= stretchedWeight / newStretchedWeight; // fully inelastic stretch conserves momentum
-            f = getNetForce(fullPower, v * MPH_PER_FPS, newStretchedWeight, driverWeight, gradePercent);
+            f = getNetForce(fullPower, v * MPH_PER_FPS, newStretchedWeight, driverWeight, gradePercent, true);
             v2 = v * v; // fps^2
             aLimit = (l2 - v2) / (2 * SLACK_PER_CAR_FEET); // fps/s
             aAvail = accelerationFpsPerSecond(f, stretchedWeight); // fps/s
@@ -280,8 +331,9 @@ public class TrainPhysics implements Serializable {
             t += dt; // seconds
             stretchedWeight = newStretchedWeight;
         }
+
         t -= dt; // seconds
-        x = SLACK_PER_CAR_FEET * tmp.carWeights.size(); // feet
+        x = SLACK_PER_CAR_FEET * carWeights.size(); // feet
         // compute stretch TrainMotion as if under constant force and constant acceleration
         a = v * v / 2 / x; // fps/s
         m = totalWeight * LBS_PER_TON / G_US; // slugs
@@ -300,15 +352,7 @@ public class TrainPhysics implements Serializable {
             appliedHp = 0;
             brake = 100 * appliedForce / brakingForceLimit(totalWeight);
         }
-        if (throttle > 100) {
-            String format = String.format("excessive applied power %f: full power %f", appliedHp, fullPower);
-            System.out.println(format);
-        }
-        return new TrainMotion(t, t,
-                x / FEET_PER_MILE,
-                v * MPH_PER_FPS,
-                a * MPH_PER_FPS,
-                appliedForce, appliedHp, throttle, brake);
+        return new TrainMotion(t, t, x / FEET_PER_MILE, v * MPH_PER_FPS, a * MPH_PER_FPS, appliedForce, appliedHp, throttle, brake);
     }
 
     /**
@@ -334,27 +378,126 @@ public class TrainPhysics implements Serializable {
      * the acceleration sequence, ending with brunching the train, the very opposite of the stretching motion, and
      * finally coming to a stop at the given route segment end point.
      *
-     * @param tmp TrainMotionParams
-     * @return a map of lists of train TrainMotion objects from start to finish
+     * @param train   Train instance en route
+     * @param rl      current route location
+     * @param journal type of bearing: false for roller, true for journal
+     * @param warm    bearing temp: false for below freezing, true for above freezing
+     * @return Map of TrainMotion lists traversing a route location in 3 phases (ACCEL, CRUISE, DECEL)
      */
-    static Map<Integer, List<TrainMotion>> getTrainMotions(TrainMotionParams tmp) {
+    static Map<Integer, List<TrainMotion>> getTrainMotions(Train train, RouteLocation rl, boolean journal, boolean warm) {
+        TrainRevenues trainRevenues = train.getTrainRevenues();
+        List<Integer> carWeights = trainRevenues.getTrainCarWeights().get(rl.getId());
+        List<Engine> engines = trainRevenues.getTrainEngines().get(rl.getId());
+
+        return getTrainMotions(engines, carWeights, rl.getGrade(), rl.getSpeedLimit(), rl.getDistance(), journal, warm);
+    }
+
+    /**
+     * A Map of Lists of train TrainMotion instances is generated from the initial motion of stretching the train, to
+     * remove all slack and achieve an initial (limited) speed, followed by an acceleration sequence, up to either the
+     * route segment speed limit or arrival at the halfway point of the route segment, followed by a cruising speed
+     * motion, if the speed limit was achieved during acceleration, then a deceleration sequence, the very opposite of
+     * the acceleration sequence, ending with brunching the train, the very opposite of the stretching motion, and
+     * finally coming to a stop at the given route segment end point.
+     *
+     * @param engines       List of all engines pulling this train
+     * @param carWeights    ordered list of all car weights in this train
+     * @param gradePercent  the grade in percentage units
+     * @param speedLimit    route speed limit in MPS (SI) or MPH
+     * @param distanceLimit initial position in meters (SI) or miles
+     * @param journal       type of bearing: false for roller, true for journal
+     * @param warm          bearing temp: false for below freezing, true for above freezing
+     * @return Map of TrainMotion lists traversing a route location in 3 phases (ACCEL, CRUISE, DECEL)
+     */
+    static Map<Integer, List<TrainMotion>> getTrainMotions(List<Engine> engines, List<Integer> carWeights, double gradePercent, int speedLimit, double distanceLimit, boolean journal, boolean warm) {
+        ArrayList<TrainMotion> accelList = new ArrayList<>();
+        ArrayList<TrainMotion> cruiseList = new ArrayList<>();
+        ArrayList<TrainMotion> decelList = new ArrayList<>();
+
         Map<Integer, List<TrainMotion>> motionMap = new HashMap<>();
-        motionMap.put(ACCELERATE, new ArrayList<>());
-        motionMap.put(CRUISE, new ArrayList<>());
-        motionMap.put(DECELERATE, new ArrayList<>());
+        motionMap.put(ACCEL, accelList);
+        motionMap.put(CRUISE, cruiseList);
+        motionMap.put(DECEL, decelList);
 
-        motionMap.get(ACCELERATE).add(TrainMotion.ZERO);
-        TrainMotion stretchTrainMotion = getStretchMotion(tmp);
-        motionMap.get(ACCELERATE).add(stretchTrainMotion);
+        double fullPower = 0;
+        double driverWeight = 0;
+        double engineWeight = 0;
+        if (engines == null) {
+            System.out.println("Alert: engines is null in getTrainMotions()");
+            return motionMap;
+        } else {
+            for (Engine engine : engines) {
+                fullPower += engine.getHpInteger();
+                driverWeight += driverWeight(engine);
+                engineWeight += engine.getAdjustedWeightTons();
+            }
+        }
 
-        TrainMotion finalAccelTrainMotion = updateAccelMotions(tmp, motionMap.get(ACCELERATE), stretchTrainMotion);
-        TrainMotion cruiseTrainMotion = cruiseMotion(tmp, finalAccelTrainMotion);
-        motionMap.get(CRUISE).add(cruiseTrainMotion);
+        // TODO EWS expect a proper initial condition for route when previous route does not stop at its endpoint! If so, do not do stretch...start with last train motion and then adjust speed as needed
+        accelList.add(TrainMotion.ZERO);
+        TrainMotion stretchTrainMotion = getStretchMotion(driverWeight, engineWeight, carWeights, fullPower, gradePercent, journal, warm);
+        accelList.add(stretchTrainMotion);
 
-        List<TrainMotion> decelerationList = invertAccelerationMotions(tmp, motionMap.get(ACCELERATE), cruiseTrainMotion);
-        motionMap.get(DECELERATE).addAll(decelerationList);
+        TrainMotion priorTrainMotion = stretchTrainMotion;
+        // accelerate train to speed limit, if possible
+        priorTrainMotion = getTrainMotionAfterAcceleration(accelList, priorTrainMotion, driverWeight, engineWeight, carWeights, gradePercent, fullPower, distanceLimit, speedLimit);
+
+        // draft decelerate train to get minimum total travel distance
+        priorTrainMotion = getTrainMotionAfterDeceleration(decelList, priorTrainMotion, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
+        double totalTravelDistance = priorTrainMotion.x;
+
+        // check total travel distance and reduce top speed as needed
+        while (distanceLimit < totalTravelDistance && accelList.size() > 2 && decelList.size() > 2) {
+            accelList.remove(accelList.size() - 1); // remove old accel top speed
+            decelList.remove(0); // remove old decel top speed
+            double x_AccelTopSpeed = accelList.get(accelList.size() - 1).x;
+            double x_DecelTopSpeed = decelList.get(0).x;
+            double travelDistanceReduction = x_DecelTopSpeed - x_AccelTopSpeed;
+            totalTravelDistance -= travelDistanceReduction;
+        }
+
+        double cruiseDistance = distanceLimit - totalTravelDistance;
+        priorTrainMotion = accelList.get(accelList.size() - 1);
+        TrainMotion cruiseMotion = cruiseMotion(priorTrainMotion, engineWeight, carWeights, fullPower, gradePercent, cruiseDistance);
+        cruiseList.add(cruiseMotion);
+
+        double addedTime = cruiseMotion.t - accelList.get(accelList.size() - 1).t;
+        double addedDistance = cruiseMotion.x - accelList.get(accelList.size() - 1).x;
+        // update time and distances in decelerate train motions
+        for (TrainMotion tm : decelList) {
+            tm.t += addedTime;
+            tm.x += addedDistance;
+        }
 
         return motionMap;
+    }
+
+    private static TrainMotion getTrainMotionAfterDeceleration(ArrayList<TrainMotion> decelList, TrainMotion priorTrainMotion, double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double distanceLimit) {
+        int topSpeed = (int) Math.round(priorTrainMotion.v);
+        for (int newSpeed = topSpeed - 1; newSpeed >= 0; newSpeed--) {
+            TrainMotion newTrainMotion = getNewTrainMotion(priorTrainMotion, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
+            if (newTrainMotion == null) { // requested new speed value not achieved
+                break;
+            } else {
+                decelList.add(newTrainMotion);
+                priorTrainMotion = newTrainMotion;
+            }
+        }
+        return priorTrainMotion;
+    }
+
+    private static TrainMotion getTrainMotionAfterAcceleration(ArrayList<TrainMotion> accelList, TrainMotion priorTrainMotion, double driverWeight, double engineWeight, List<Integer> carWeights, double gradePercent, double fullPower, double distanceLimit, int speedLimit) {
+        int topSpeed = 1 + (int) priorTrainMotion.v;
+        for (int newSpeed = topSpeed; newSpeed <= speedLimit; newSpeed++) {
+            TrainMotion newTrainMotion = getNewTrainMotion(priorTrainMotion, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
+            if (newTrainMotion == null) { // requested new speed value not achieved
+                break;
+            } else {
+                accelList.add(newTrainMotion);
+                priorTrainMotion = newTrainMotion;
+            }
+        }
+        return priorTrainMotion;
     }
 
     /**
@@ -373,7 +516,7 @@ public class TrainPhysics implements Serializable {
      *
      * @param fullPower    full power to accelerate motion in watts (SI) or HP
      * @param speed        speed in MPS (SI) or MPH
-     * @param driverWeight driver wheel weight load available for applied force in Newtons (SI) or tons
+     * @param driverWeight driver wheels weight load available for applied force in Newtons (SI) or tons
      * @return power in watts (SI) or PH
      */
     private static double appliedPower(double fullPower, double speed, double driverWeight) {
@@ -382,6 +525,13 @@ public class TrainPhysics implements Serializable {
         double appliedForce = Math.min(tractiveForceLimit, tractiveForce);
 
         return appliedForce / tractiveForce * fullPower;
+    }
+
+    private static double availTractiveForce(double driverWeight, double fullPower, double totalWeight, double v_0, boolean accelerate) {
+        double accelForceLimit = Math.min(tractiveForceLimit(driverWeight), getTractiveForce(fullPower, v_0));
+        double brakingForceLimit = brakingForceLimit(totalWeight);
+
+        return accelerate ? accelForceLimit : brakingForceLimit;
     }
 
     /**
@@ -396,22 +546,19 @@ public class TrainPhysics implements Serializable {
         return WHEEL_TRACK_ADHESION * BRAKE_DESIGN_LIMIT * totalWeight;
     }
 
-    private static TrainMotion cruiseMotion(TrainMotionParams tmp, TrainMotion priorTrainMotion) {
-        double totalDistance = tmp.distance;
-        double totalWeight = tmp.trainWeight;
-        double fullPower = tmp.fullPower;
-
+    private static TrainMotion cruiseMotion(TrainMotion priorTrainMotion, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double cruiseDistance) {
+        double carsWeight = carWeights.stream().mapToInt(w -> w).sum();
+        double totalWeight = engineWeight + carsWeight;
         // parameters for cruise (constant speed motion)
         double brakingForceLimit = brakingForceLimit(totalWeight);
         double priorDistance = priorTrainMotion.x;
-        double cruiseDistance = totalDistance - 2 * priorDistance;
         double cruiseSpeed = priorTrainMotion.v;
-        double gradeResistance = getGradeResistance(tmp.trainWeight, tmp.gradePercent);
-        double rollingResistance = getRollingResistance(totalWeight, cruiseSpeed);
         double cruiseTime = 3600 * cruiseDistance / cruiseSpeed;
         double throttle = 0;
         double brake = 0;
 
+        double gradeResistance = getGradeResistance(totalWeight, gradePercent);
+        double rollingResistance = getRollingResistance(totalWeight, cruiseSpeed);
         double netCruiseForce = gradeResistance + rollingResistance;
         double appliedPower = netCruisePower(netCruiseForce, cruiseSpeed);
         if (appliedPower > 0) {
@@ -420,17 +567,21 @@ public class TrainPhysics implements Serializable {
             appliedPower = 0;
             brake = -100 * netCruiseForce / brakingForceLimit;
         }
-        if (throttle > 100) {
-            String format = String.format("excessive applied power %f: full power %f", appliedPower, fullPower);
-            System.out.println(format);
-        }
 
         return new TrainMotion(cruiseTime, priorTrainMotion.t + cruiseTime, priorDistance + cruiseDistance, cruiseSpeed, 0, netCruiseForce, appliedPower, throttle, brake);
     }
 
-    private static List<TrainMotion> invertAccelerationMotions(TrainMotionParams tmp, List<TrainMotion> accelerateTrainMotions, TrainMotion cruiseTrainMotion) {
-        double totalWeight = tmp.trainWeight;
-        double fullPower = tmp.fullPower;
+    private static double driverWeight(Engine engine) {
+        String engineTypeName = engine.getTypeName();
+        boolean steamType = engineTypeName != null && (engineTypeName.contains("Steam"));
+        double factor = steamType ? TrainPhysics.STEAMER_DRIVER_TO_ENGINE_WEIGHT_RATIO : 1;
+
+        return factor * engine.getAdjustedWeightTons();
+    }
+
+    private static List<TrainMotion> invertAccelerationMotions(double engineWeight, List<Integer> carWeights, double fullPower, List<TrainMotion> accelerateTrainMotions, TrainMotion cruiseTrainMotion) {
+        double carsWeight = carWeights.stream().mapToInt(w -> w).sum();
+        double totalWeight = carsWeight + engineWeight;
 
         TrainMotion priorAccelTrainMotion = accelerateTrainMotions.get(accelerateTrainMotions.size() - 1);
         TrainMotion thisAccelTrainMotion;
@@ -465,10 +616,6 @@ public class TrainPhysics implements Serializable {
             } else {
                 netPower = 0;
                 brake = Math.abs(100 * newForce / brakingForceLimit);
-            }
-            if (throttle > 100) {
-                String format = String.format("excessive applied power %f: full power %f", netPower, fullPower);
-                System.out.println(format);
             }
             decelerationTrainMotion = new TrainMotion(dt, time, newDistance, newSpeed, acceleration, newForce, netPower, throttle, brake);
             decelerationList.add(decelerationTrainMotion);
@@ -506,7 +653,7 @@ public class TrainPhysics implements Serializable {
      * approach will be used as standard, since it reduces the stress on couplers and initial traction dependencies.
      *
      * @param engineWeight engine weight including possible tender
-     * @param driverWeight driver wheel weight load available for starting force in Newtons (SI) or tons
+     * @param driverWeight driver wheels weight load available for starting force in Newtons (SI) or tons
      * @param isJournal    axle bearing type: journal if true, else roller
      * @param isWarm       axle temperature: above freezing if true, else below freezing
      * @param gradePercent the grade in percentage units
@@ -544,24 +691,28 @@ public class TrainPhysics implements Serializable {
         return Math.min(getDrawbarPullLimit(), tractionForceLimit(driversWeight));
     }
 
-    private static TrainMotion updateAccelMotions(TrainMotionParams tmp, List<TrainMotion> accelerateTrainMotions, TrainMotion lastTrainMotion) {
+    private static void updateAccelMotions1SecondSteps(List<TrainMotion> accelerateTrainMotions, double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double speedLimit, double distance) {
+        double carsWeight = carWeights.stream().mapToInt(w -> w).sum();
+        double totalWeight = engineWeight + carsWeight;
         double oldDistance;
         double oldSpeed;
         double netForce;
         double appliedPower;
-        double target = 0.5 * tmp.distance;
+        double target = 0.5 * distance;
 
-        double acceleration = lastTrainMotion.a;
-        double newDistance = lastTrainMotion.x;
-        double newSpeed = oldSpeed = lastTrainMotion.v;
-        double time = lastTrainMotion.t;
+        TrainMotion stretchTrainMotion = accelerateTrainMotions.get(accelerateTrainMotions.size() - 1);
+        double acceleration = stretchTrainMotion.a;
+        double newDistance = stretchTrainMotion.x;
+        double newSpeed = oldSpeed = stretchTrainMotion.v;
+        double time = stretchTrainMotion.t;
+        TrainMotion thisTrainMotion;
 
         // accelerate in 1-second steps until limits are hit
         double dt = 1;
         boolean done = false;
-        while (!done && MINIMUM_ACCELERATION < acceleration && newSpeed < tmp.speedLimit && newDistance < target) {
-            netForce = getNetForce(tmp.fullPower, newSpeed, tmp.trainWeight, tmp.driverWeight, tmp.gradePercent);
-            acceleration = getAcceleration(netForce, tmp.trainWeight);
+        while (!done && MINIMUM_ACCELERATION < acceleration && newSpeed < speedLimit && newDistance < target) {
+            netForce = getNetForce(fullPower, newSpeed, totalWeight, driverWeight, gradePercent, true);
+            acceleration = getAcceleration(netForce, totalWeight);
 
             oldDistance = newDistance;
             newDistance = getNewDistance(newDistance, newSpeed, acceleration);
@@ -574,27 +725,25 @@ public class TrainPhysics implements Serializable {
 
             oldSpeed = newSpeed;
             newSpeed = getNewSpeed(newSpeed, acceleration);
-            if (tmp.speedLimit < newSpeed) {
-                dt = (tmp.speedLimit - oldSpeed) / (newSpeed - oldSpeed);
-                newSpeed = tmp.speedLimit;
+            if (speedLimit < newSpeed) {
+                dt = (speedLimit - oldSpeed) / (newSpeed - oldSpeed);
+                newSpeed = speedLimit;
                 newDistance = oldDistance + dt * (newDistance - oldDistance);
-                netForce = getNetForce(tmp.fullPower, newSpeed, tmp.trainWeight, tmp.driverWeight, tmp.gradePercent);
-                acceleration = getAcceleration(netForce, tmp.trainWeight);
+                netForce = getNetForce(fullPower, newSpeed, carsWeight, driverWeight, gradePercent, true);
+                acceleration = getAcceleration(netForce, carsWeight + engineWeight);
                 done = true;
             }
 
-            appliedPower = appliedPower(tmp.fullPower, newSpeed, tmp.driverWeight);
-            double throttle = 100 * appliedPower / tmp.fullPower;
+            appliedPower = appliedPower(fullPower, newSpeed, driverWeight);
+            double throttle = 100 * appliedPower / fullPower;
             if (throttle > 100) {
-                String format = String.format("excessive applied power %f: driver weight %f, full power %f", appliedPower, tmp.driverWeight, tmp.fullPower);
+                String format = String.format("excessive applied power %f: driver weight %f, full power %f", appliedPower, driverWeight, fullPower);
                 System.out.println(format);
             }
             time += dt;
-            lastTrainMotion = new TrainMotion(dt, time, newDistance, newSpeed, acceleration, netForce, appliedPower, throttle, 0);
-            accelerateTrainMotions.add(lastTrainMotion);
+            thisTrainMotion = new TrainMotion(dt, time, newDistance, newSpeed, acceleration, netForce, appliedPower, throttle, 0);
+            accelerateTrainMotions.add(thisTrainMotion);
         }
-
-        return lastTrainMotion;
     }
 
     public String getReportSummary() {
@@ -603,96 +752,113 @@ public class TrainPhysics implements Serializable {
 
     @Override
     public String toString() {
-        return "TrainMotion Summary {" + reportSummary + '}';
+        return "TrainPhysics Summary Report {" + reportSummary + '}';
     }
 
-    private void updateMotionReport(Train train, TrainRevenues trainRevenues, RouteLocation rl) {
+    private void updateMotionReport(Train train, RouteLocation rl, boolean detailed) {
+        Map<Integer, List<TrainMotion>> motionMap = motionMaps.get(rl);
+
+        TrainRevenues trainRevenues = train.getTrainRevenues();
         String rlId = rl.getId();
 
-        TrainMotionParams tmp = new TrainMotionParams( //
-                trainRevenues.getTrainCarWeights().get(rlId),  //
-                trainRevenues.getTrainEngineWeight().get(rlId), //
-                trainRevenues.getTrainEngineDriverWeight().get(rlId), //
-                trainRevenues.getTrainEngineHP().get(rlId), //
-                rl.getGrade(), //
-                rl.getSpeedLimit(), //
-                rl.getDistance(), //
-                true, //
-                false //
-        );
+        double fullPower = 0;
+        double driverWeight = 0;
+        double engineWeight = 0;
+        String engineModel = "";
+        String engineType = "";
+        List<Engine> engines = trainRevenues.getTrainEngines().get(rlId);
+        if (engines == null) {
+            System.out.println("Alert: engines is null in updateMotionReport()");
+            return;
+        }
+        for (Engine engine : engines) {
+            fullPower += engine.getHpInteger();
+            driverWeight += driverWeight(engine);
+            engineWeight += engine.getAdjustedWeightTons();
 
-        updateMotionReport(tmp, train, trainRevenues.getTrainEngineModel().get(rlId), trainRevenues.getTrainEngineType().get(rlId));
-    }
+            if (engineModel.length() == 0) {
+                engineModel = engine.getModel();
+            } else if (engineModel.contains(engine.getModel())) {
+                engineModel += "'s";
+            } else {
+                engineModel += (", " + engine.getModel());
+            }
 
-    private void updateMotionReport(TrainMotionParams tmp, Train train, String engineModel, String engineType) {
-        Map<Integer, List<TrainMotion>> motionMap = getTrainMotions(tmp);
+            if (engineType.length() == 0) {
+                engineType = engine.getTypeName();
+            } else if (!engineType.contains(engine.getTypeName())) {
+                engineType += (", " + engine.getTypeName());
+            }
+        }
 
-        double power = tmp.fullPower;
-        double speedLimit = tmp.speedLimit;
-        double driverWeight = tmp.driverWeight;
-        double engineWeight = tmp.engineWeight;
-        double totalWeight = tmp.trainWeight;
-        double grade = tmp.gradePercent;
-        int trainCarCount = tmp.carCount;
+        List<Integer> carWeights = trainRevenues.getTrainCarWeights().get(rlId);
+        double gradePercent = rl.getGrade();
+        double speedLimit = rl.getSpeedLimit();
+
+        double carsWeight = carWeights.stream().mapToInt(w -> w).sum();
+        double totalWeight = engineWeight + carsWeight;
 
         if (motionMap.isEmpty()) {
-            reportSummary.append(String.format("\n\tNo motion for engine model %s:" + "\n\t\tpower = %5.3f (HP)" + "\n\t\tdriver weight = %5.3f" + "\n\t\tengine weight = %5.3f" + "\n\t\ttotal weight = %5.3f (tons)" + "\n\t\tgrade = %5.3f%%\n", engineModel, power, driverWeight, engineWeight, totalWeight, grade));
+            reportSummary.append(String.format("\n\tNo motion for engine model %s:" + "\n\t\tfull power = %5.3f (HP)" + "\n\t\tdriver weight = %5.3f (tons)" + "\n\t\tengine weight = %5.3f (tons)" + "\n\t\ttrain weight = %5.3f (tons)" + "\n\t\tgrade = %5.3f%%\n", engineModel, fullPower, driverWeight, engineWeight, totalWeight, gradePercent));
         } else {
             int motionCount = 0;
 
-            List<TrainMotion> trainMotions = motionMap.get(ACCELERATE);
+            List<TrainMotion> accelTrainMotions = motionMap.get(ACCEL);
             double maxAccelerationThrottle = 0;
             double maxAccelerationBrake = 0;
-            motionCount += trainMotions.size();
-            for (TrainMotion tm : trainMotions) {
+            motionCount += accelTrainMotions.size();
+            for (TrainMotion tm : accelTrainMotions) {
                 maxAccelerationThrottle = Math.max(maxAccelerationThrottle, tm.tp);
                 maxAccelerationBrake = Math.max(maxAccelerationBrake, tm.bp);
             }
-            double accelerationTime = trainMotions.get(trainMotions.size() - 1).t - trainMotions.get(0).t;
 
-            trainMotions = motionMap.get(CRUISE);
-            TrainMotion ctm = trainMotions.get(0);
+            double accelStartTime = accelTrainMotions.get(0).t;
+            double accelFinishTime = accelTrainMotions.get(accelTrainMotions.size() - 1).t;
+            double accelElapsedTime = accelFinishTime - accelStartTime;
+
+            List<TrainMotion> cruiseTrainMotions = motionMap.get(CRUISE);
+            TrainMotion ctm = cruiseTrainMotions.get(0);
             double cruiseThrottle = ctm.tp;
             double cruiseBrake = ctm.bp;
-            double cruiseSpeedTime = ctm.t;
-            motionCount++;
+            double cruiseSpeedTime = ctm.t - accelFinishTime;
+            motionCount += cruiseTrainMotions.size();
 
-            trainMotions = motionMap.get(DECELERATE);
+            List<TrainMotion> decelTrainMotions = motionMap.get(DECEL);
 
             double maxDecelerationThrottle = 0;
             double maxDecelerationBrake = 0;
-            motionCount += trainMotions.size();
-            for (TrainMotion tm : trainMotions) {
+            motionCount += decelTrainMotions.size();
+            for (TrainMotion tm : decelTrainMotions) {
                 maxDecelerationThrottle = Math.max(maxDecelerationThrottle, tm.tp);
                 maxDecelerationBrake = Math.max(maxDecelerationBrake, tm.bp);
             }
-            double decelerationTime = trainMotions.get(trainMotions.size() - 1).t - trainMotions.get(0).t;
+            double decelerationTime = decelTrainMotions.get(decelTrainMotions.size() - 1).t - ctm.t;
 
-            TrainMotion finalTrainMotion = motionMap.get(2).get(motionMap.get(2).size() - 1);
-            double seconds = finalTrainMotion.t;
-            double elapsedTime = seconds / 60.0; // minutes
+            TrainMotion finalTrainMotion = decelTrainMotions.get(decelTrainMotions.size() - 1);
+            double totalSeconds = finalTrainMotion.t;
             double totalDistance = finalTrainMotion.x;
 
-            String gradeString = String.format("%s%s grade",
-                    grade < 0 ? "down a " : grade > 0 ? "into a " : "with no",
-                    (grade == 0 ? "" : String.format("%.1f%%", Math.abs(grade))));
-            double minHp = minHp(speedLimit, totalWeight, grade);
-            double averageSpeed = totalDistance * 60.0 / elapsedTime;
+            String gradeString = String.format("%s%s grade", gradePercent < 0 ? "down a " : gradePercent > 0 ? "into a " : "with no", (gradePercent == 0 ? "" : String.format("%.1f%%", Math.abs(gradePercent))));
+            double minHp = minHp(speedLimit, totalWeight, gradePercent);
+            double totalHours = totalSeconds / SEC_PER_HOUR;
+            double averageSpeed = totalDistance / totalHours;
+
+            String note = endStop(rl, trainRevenues) ? "" : "n't";
 
             StringBuilder thisSummary = new StringBuilder();
-            thisSummary.append(String.format("\n\t\tRoute segment: %.0f mile distance in %s (HH:MM:SS), %s, under a %.0f MPH speed limit", totalDistance, getFormattedTime(seconds), gradeString, speedLimit));
-            thisSummary.append(String.format("\n\t\tTrain \"%s\": %d cars, %.0f tons, recommend at least %.0f HP; route average %.1f MPH", train.getName(), trainCarCount, totalWeight, minHp, averageSpeed));
-            thisSummary.append(String.format("\n\t\tEngine model \"%s\" (%s): %.0f HP, %.0f ton engine: %.0f tons on drivers, HTP = %4.2f", engineModel, engineType, power, engineWeight, driverWeight, power / totalWeight));
+            thisSummary.append(String.format("\n\t\tRoute segment %s: %.0f mile distance in %s (HH:MM:SS), %s, under a %.0f MPH speed limit, end stop is%s required", rl.getSequenceNumber(), totalDistance, timeString(totalSeconds), gradeString, speedLimit, note));
+            thisSummary.append(String.format("\n\t\tTrain \"%s\": %.0f HP required; %d cars: %.0f tons; route average %.1f MPH", train.getName(), minHp, carWeights.size(), carsWeight, averageSpeed));
+            thisSummary.append(String.format("\n\t\tDrive \"%s\", %.0f HP, %.0f ton engine weight (%s): %.0f tons on drivers, HPT = %3.1f", engineModel, fullPower, engineWeight, engineType, driverWeight, fullPower / totalWeight));
             thisSummary.append(String.format("\n\t\t%-13s | %8s | %8s | %8s |", "Controls:", "start", "cruise", "finish"));
-            thisSummary.append(String.format("\n\t\t%-13s | %8s | %8s | %8s |", "HH:MM:SS:", getFormattedTime(accelerationTime), getFormattedTime(cruiseSpeedTime), getFormattedTime(decelerationTime)));
+            thisSummary.append(String.format("\n\t\t%-13s | %8s | %8s | %8s |", "HH:MM:SS:", timeString(accelElapsedTime), timeString(cruiseSpeedTime), timeString(decelerationTime)));
             thisSummary.append(String.format("\n\t\t%-13s | %7.1f%% | %7.1f%% | %7.1f%% |", "Max Power:", maxAccelerationThrottle, cruiseThrottle, maxDecelerationThrottle));
             thisSummary.append(String.format("\n\t\t%-13s | %7.1f%% | %7.1f%% | %7.1f%% |\n", "Max Brake:", maxAccelerationBrake, cruiseBrake, maxDecelerationBrake));
 
-            if (false) {
-                thisSummary.append(String.format("\tTrainMotion count = %d {\n\t\t%s\n", motionCount, TrainMotion.getMotionsHeader()));
+            if (detailed) {
+                thisSummary.append(String.format("TrainMotion: %d steps {\n\t%s\n", motionCount, TrainMotion.getMotionsHeader()));
                 for (int i = 0; i < 3; i++) {
                     for (TrainMotion tm : motionMap.get(i)) {
-                        thisSummary.append("\t\t").append(tm.getMotionData()).append('\n');
+                        thisSummary.append("\t").append(tm.getMotionData()).append('\n');
                     }
                 }
                 thisSummary.append("\t}\n");
@@ -702,8 +868,23 @@ public class TrainPhysics implements Serializable {
         }
     }
 
-    private double minHp(double speedLimit, double totalWeight, double grade) {
-        double hpRequired = speedLimit * totalWeight * grade / 12;
+    private boolean endStop(RouteLocation rl, TrainRevenues trainRevenues) {
+        return trainRevenues.getTrainPickUpsOrDropOffs().contains(rl.getId());
+    }
+
+    /**
+     * Using the standard prototype formula for the Horsepower per Ton (HPT) ratio, defined as by the formula, Speed
+     * (MPH) * Grade (%) / 12, the weight in tons is used to calculate the minimum required horsepower to pull this
+     * train (up) the given grade. If the result is less than the Setup HPT, perhaps due to a non-positive grade, the
+     * Setup HPT is used, ignoring the speed and weight parameter values
+     *
+     * @param speedLimit   route speed limit in MPH
+     * @param totalWeight  in tons
+     * @param gradePercent the grade in percentage units
+     * @return recommended minimum horse power for this situation
+     */
+    private double minHp(double speedLimit, double totalWeight, double gradePercent) {
+        double hpRequired = speedLimit * totalWeight * gradePercent / 12;
         if (hpRequired < Setup.getHorsePowerPerTon() * totalWeight) {
             hpRequired = Setup.getHorsePowerPerTon() * totalWeight; // minimum HPT
         }

@@ -1,6 +1,7 @@
 package jmri.jmrit.operations.rollingstock.engines;
 
 import java.beans.PropertyChangeEvent;
+import java.io.Serializable;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -20,7 +21,7 @@ import jmri.jmrit.roster.RosterEntry;
  *
  * @author Daniel Boudreau (C) Copyright 2008
  */
-public class Engine extends RollingStock {
+public class Engine extends RollingStock implements Serializable {
 
     public static final int NCE_REAR_BLOCK_NUMBER = 8;
     public static final int B_UNIT_BLOCKING = 10; // block B Units after NCE Consists

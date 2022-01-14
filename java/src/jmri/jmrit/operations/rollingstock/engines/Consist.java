@@ -1,5 +1,6 @@
 package jmri.jmrit.operations.rollingstock.engines;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import jmri.jmrit.operations.rollingstock.RollingStockGroup;
@@ -11,7 +12,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Daniel Boudreau Copyright (C) 2008, 2010
  */
-public class Consist extends RollingStockGroup<Engine> {
+public class Consist extends RollingStockGroup<Engine> implements Serializable {
 
     protected int _consistNumber = 0;
 

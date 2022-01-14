@@ -39,7 +39,9 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     private static final int LOC_3 = 3;
     private static final int LOC_4 = 4;
     private static final int LOC_5 = 5;
-    private static final double TRAIN_TOTAL_REVENUE = 6566.25;
+    private static final int LOC_6 = 6;
+    private static final int LOC_7 = 7;
+    private static final double TRAIN_TOTAL_REVENUE = 6983.75;
 
     private CarManager carManager;
     private CarTypes carTypes;
@@ -213,10 +215,12 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         List<Engine> engines = new ArrayList<>();
         RouteLocation rl3 = null;
         RouteLocation rl4 = null;
+        RouteLocation rl5 = null;
+        RouteLocation rl6 = null;
         int customerNumber = 1;
         Location location;
         // create Tracks, Locations, RouteLocations, and freight cars
-        for (int loc = LOC_1; loc <= LOC_5; loc++) {
+        for (int loc = LOC_1; loc <= LOC_7; loc++) {
             location = registerNewLocation(loc);
 
             switch (loc) {
@@ -245,7 +249,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("N&W", "76566", "Hopper", "Feed", track);
                     break;
                 case LOC_3:
-                    rl3 = registerNewRouteLocation(loc, 2 * loc, 3.0, location);
+                    rl3 = registerNewRouteLocation(loc, 2 * loc, 2.0, location);
 
                     createNewTrack(0, location, "Yard " + loc, Track.YARD);
 
@@ -258,7 +262,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("UP", "46774D", "Stock", dLn, track);
                     break;
                 case LOC_4:
-                    rl4 = registerNewRouteLocation(loc, 2 * loc, 0.0, location);
+                    rl4 = registerNewRouteLocation(loc, 2 * loc, 1.0, location);
                     createNewTrack(0, location, "Yard " + loc, Track.YARD);
 
                     track = createNewTrack(customerNumber, location, "Customer " + customerNumber + "-" + loc, Track.SPUR);
@@ -269,6 +273,12 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("VGN", "15508", "Hopper", dLn, track);
                     break;
                 case LOC_5:
+                    rl5 = registerNewRouteLocation(loc, 2 * loc, 0, location);
+                    break;
+                case LOC_6:
+                    rl6 = registerNewRouteLocation(loc, 2 * loc, 0, location);
+                    break;
+                case LOC_7:
                     registerNewRouteLocation(loc, 2 * loc, 0.0, location);
                     createNewTrack(6, location, "Yard " + loc, Track.YARD);
                     break;
@@ -276,14 +286,14 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         }
         String model;
         // create engines
-        for (int loc = LOC_1; loc <= LOC_5; loc++) {
+        for (int loc = LOC_1; loc <= LOC_7; loc++) {
             switch (loc) {
                 case LOC_1:
                     track = tracksByTrackId.get("1s01");
                     engines.add(registerNewEngine(track, road, "500", "FT", "Diesel", null));
                     break;
                 case LOC_3:
-                    model = "S-2 2-8-4";
+                    model = "GP40";
                     train.setSecondLegOptions(Train.CHANGE_ENGINES);
                     train.setSecondLegStartRouteLocation(rl3);
                     train.setSecondLegEndRouteLocation(rl4);
@@ -293,19 +303,10 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     train.setSecondLegCabooseRoad(road);
                     track = tracksByTrackId.get("1s03");
                     track.setBlockCarsEnabled(true);
-                    //                    for (Engine engine : engines) {
-                    //                        engine.reset();
-                    //                    }
-                    //                    engines.clear();
                     Consist consist = null;
                     consist = new Consist("Double");
-                    model = "S-2 2-8-4";
-                    engines.add(registerNewEngine(track, road, "503A", model, "Steam", consist));
-                    engines.add(registerNewEngine(track, road, "503B", model, "Steam", consist));
-                    //                    model = "E8";
-                    //                    model = "Shay";
-                    //                    engines.add(registerNewEngine(track, "NKP", "764" + loc, model, consist));
-                    //                    engines.add(registerNewEngine(track, "NKP", "765" + loc, model, consist));
+                    engines.add(registerNewEngine(track, road, "503A", model, "Diesel", consist));
+                    engines.add(registerNewEngine(track, road, "503B", model, "Diesel", consist));
                     break;
                 case LOC_4:
                     model = "RS1";
@@ -317,10 +318,6 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     train.setThirdLegCabooseRoad(road);
                     track = tracksByTrackId.get("1s04");
                     track.setBlockCarsEnabled(true);
-                    //                    for (Engine engine : engines) {
-                    //                        engine.reset();
-                    //                    }
-                    //                    engines.clear();
                     engines.add(registerNewEngine(track, road, "504", model, "Diesel", null));
                     break;
             }
@@ -520,7 +517,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     private void verifyCsvRevenue(boolean restartMove) throws Exception {
         buildRailroad();
 
-        for (int loc = LOC_1; loc < LOC_5; loc++) {
+        for (int loc = LOC_1; loc < LOC_7; loc++) {
             switch (loc) {
                 case LOC_1:
                     conductorCancel("C&O", "1002");
@@ -536,7 +533,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     conductorCancel("VGN", "15779");
                     conductorDivert("UP", "46774D", 3, 4);
                     break;
-                case LOC_4:
+                case LOC_7:
                     conductorCancel("VGN", "15508");
                     break;
             }
@@ -550,15 +547,15 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         train.terminate();
         assertFalse(train.isBuilt());
 
-        TreeMap<Integer, List<String>> csvRevenueAsTreeMap = getCsvRevenueAsTreeMap(train);
-        List<String> lastRowValues = csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1);
-        assertEquals(NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_REVENUE)), csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1).get(lastRowValues.size() - 1));
-
-        TrainPhysics trainPhysics = new TrainPhysics(train);
+        TrainPhysics trainPhysics = new TrainPhysics(train, false);
         assertNotNull(trainPhysics);
         if (Locale.getDefault().equals(defaultLocale)) {
             System.out.println(trainPhysics);
         }
+
+        TreeMap<Integer, List<String>> csvRevenueAsTreeMap = getCsvRevenueAsTreeMap(train);
+        List<String> lastRowValues = csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1);
+        assertEquals(NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_REVENUE)), csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1).get(lastRowValues.size() - 1));
     }
 
 }
