@@ -547,7 +547,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         train.terminate();
         assertFalse(train.isBuilt());
 
-        TrainPhysics trainPhysics = new TrainPhysics(train, false);
+        TrainPhysics trainPhysics = new TrainPhysics(train, true);
         assertNotNull(trainPhysics);
         if (Locale.getDefault().equals(defaultLocale)) {
             System.out.println(trainPhysics);
