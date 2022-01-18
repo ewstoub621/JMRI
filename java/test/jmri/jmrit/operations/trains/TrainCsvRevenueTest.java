@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainCsvRevenueTest extends OperationsTestCase {
+    private static final boolean DEBUG = false;
     private static final String ID = "1";
     private static final int LENGTH = 1000;
     private static final int LOC_1 = 1;
@@ -125,7 +126,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     public void testCreateCsvRevenueTrainDK() throws Exception {
         try {
             Locale.setDefault(new Locale("da", "DK"));
-            verifyCsvRevenue(true);
+            verifyCsvRevenue(false);
         } finally {
             Locale.setDefault(defaultLocale);
         }
@@ -185,7 +186,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     public void testCreateCsvRevenueTrainUS() throws Exception {
         try {
             Locale.setDefault(Locale.US);
-            verifyCsvRevenue(false);
+            verifyCsvRevenue(true);
         } finally {
             Locale.setDefault(defaultLocale);
         }
@@ -285,14 +286,18 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
             }
         }
         String model;
+        String type = "Diesel";
         // create engines
         for (int loc = LOC_1; loc <= LOC_7; loc++) {
             switch (loc) {
                 case LOC_1:
                     track = tracksByTrackId.get("1s01");
-                    engines.add(registerNewEngine(track, road, "500", "FT", "Diesel", null));
+                    model = "GP20";
+                    engines.add(registerNewEngine(track, road, "500", model, type, null));
                     break;
                 case LOC_3:
+                    track = tracksByTrackId.get("1s03");
+                    track.setBlockCarsEnabled(true);
                     model = "GP40";
                     train.setSecondLegOptions(Train.CHANGE_ENGINES);
                     train.setSecondLegStartRouteLocation(rl3);
@@ -301,14 +306,13 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     train.setSecondLegEngineModel(model);
                     train.setSecondLegEngineRoad(road);
                     train.setSecondLegCabooseRoad(road);
-                    track = tracksByTrackId.get("1s03");
-                    track.setBlockCarsEnabled(true);
-                    Consist consist = null;
-                    consist = new Consist("Double");
-                    engines.add(registerNewEngine(track, road, "503A", model, "Diesel", consist));
-                    engines.add(registerNewEngine(track, road, "503B", model, "Diesel", consist));
+                    Consist consist = new Consist("Double");
+                    engines.add(registerNewEngine(track, road, "503A", model, type, consist));
+                    engines.add(registerNewEngine(track, road, "503B", model, type, consist));
                     break;
                 case LOC_4:
+                    track = tracksByTrackId.get("1s04");
+                    track.setBlockCarsEnabled(true);
                     model = "RS1";
                     train.setThirdLegOptions(Train.CHANGE_ENGINES);
                     train.setThirdLegStartRouteLocation(rl4);
@@ -316,17 +320,16 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     train.setThirdLegEngineModel(model);
                     train.setThirdLegEngineRoad(road);
                     train.setThirdLegCabooseRoad(road);
-                    track = tracksByTrackId.get("1s04");
-                    track.setBlockCarsEnabled(true);
-                    engines.add(registerNewEngine(track, road, "504", model, "Diesel", null));
+                    engines.add(registerNewEngine(track, road, "504", model, type, null));
                     break;
             }
         }
         train.build();
 
-        for (Engine e : InstanceManager.getDefault(EngineManager.class).getList(train)) {
-            System.out.printf("Engine %-5s HP %-6s at %-3s tons: %s%n", e.getHp(), e.getTypeName(), e.getWeightTons(), e.getModel());
-        }
+        if (DEBUG)
+            for (Engine e : InstanceManager.getDefault(EngineManager.class).getList(train)) {
+                System.out.printf("Engine %-5s HP %-6s at %-3s tons: %s%n", e.getHp(), e.getTypeName(), e.getWeightTons(), e.getModel());
+            }
 
         assertTrue(train.isBuilt());
     }
@@ -549,7 +552,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
 
         TrainPhysics trainPhysics = new TrainPhysics(train, true);
         assertNotNull(trainPhysics);
-        if (Locale.getDefault().equals(defaultLocale)) {
+        if (DEBUG && Locale.getDefault().equals(defaultLocale)) {
             System.out.println(trainPhysics);
         }
 

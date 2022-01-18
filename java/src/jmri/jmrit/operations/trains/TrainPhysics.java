@@ -55,22 +55,22 @@ public class TrainPhysics implements Serializable {
     protected static final double NEWTONS_PER_TON = NEWTONS_PER_LB * LBS_PER_TON; // ~8896.44
     protected static final double STRETCH_SPEED_LIMIT_FPS = STRETCH_SPEED_LIMIT_MPH / MPH_PER_FPS;
 
-    static final int START = 0;
-    static final int CRUISE = 1;
-    static final int BRAKE = 2;
-
     private static final long serialVersionUID = 1L;
     private final StringBuilder reportSummary = new StringBuilder();
-    private final Map<RouteLocation, Map<Integer, List<TrainMotion>>> motionMaps = new HashMap<>();
+    private final Map<RouteLocation, List<TrainMotion>> trainMotionMap = new HashMap<>();
 
     public TrainPhysics(Train train, boolean detailed) {
         Route route = train.getRoute();
-        boolean journal = true;
-        boolean warm = false;
+        boolean journal = true; // worst case rolling resistance
+        boolean warm = false; // worst case rolling resistance
 
         for (RouteLocation rl : route.getLocationsBySequenceList()) {
-            motionMaps.put(rl, getTrainMotions(train, rl, journal, warm));
-            updateMotionReport(train, rl, detailed);
+            if (rl.getTrainWeight() > 0 && rl.getTrainLength() > 0) {
+                TrainMotion priorTm = priorTrainMotion(train, rl);
+                List<TrainMotion> trainMotionList = getTrainMotions(train, rl, journal, warm, priorTm.v);
+                trainMotionMap.put(rl, trainMotionList);
+                updateMotionReport(train, rl, detailed);
+            }
         }
     }
 
@@ -223,7 +223,7 @@ public class TrainPhysics implements Serializable {
     static TrainMotion getStretchMotion(double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, boolean journal, boolean warm) {
         double totalWeight = engineWeight + carWeights.stream().mapToInt(w -> w).sum();
         if (getNetForce(fullPower, STRETCH_SPEED_LIMIT_MPH, totalWeight, driverWeight, gradePercent) < 0) {
-            return TrainMotion.ZERO;
+            return new TrainMotion();
         }
 
         double f = netForceAtRest(engineWeight, driverWeight, journal, warm, gradePercent);
@@ -305,14 +305,16 @@ public class TrainPhysics implements Serializable {
      * @param rl      current route location
      * @param journal type of bearing: false for roller, true for journal
      * @param warm    bearing temp: false for below freezing, true for above freezing
+     * @param priorSpeed
      * @return Map of TrainMotion lists traversing a route location in 3 phases (ACCEL, CRUISE, DECEL)
      */
-    static Map<Integer, List<TrainMotion>> getTrainMotions(Train train, RouteLocation rl, boolean journal, boolean warm) {
+    static List<TrainMotion> getTrainMotions(Train train, RouteLocation rl, boolean journal, boolean warm, double priorSpeed) {
         TrainRevenues trainRevenues = train.getTrainRevenues();
         List<Integer> carWeights = trainRevenues.getTrainCarWeights().get(rl.getId());
         List<Engine> engines = trainRevenues.getTrainEngines().get(rl.getId());
+        boolean endStop = endStop(trainRevenues, rl);
 
-        return getTrainMotions(engines, carWeights, rl.getGrade(), rl.getSpeedLimit(), rl.getDistance(), journal, warm);
+        return getTrainMotions(engines, carWeights, rl.getGrade(), rl.getSpeedLimit(), rl.getDistance(), journal, warm, endStop, priorSpeed);
     }
 
     /**
@@ -330,24 +332,24 @@ public class TrainPhysics implements Serializable {
      * @param distanceLimit initial position in meters (SI) or miles
      * @param journal       type of bearing: false for roller, true for journal
      * @param warm          bearing temp: false for below freezing, true for above freezing
+     * @param endStop
+     * @param priorSpeed
      * @return Map of TrainMotion lists traversing a route location in 3 phases (ACCEL, CRUISE, DECEL)
      */
-    static Map<Integer, List<TrainMotion>> getTrainMotions(List<Engine> engines, List<Integer> carWeights, double gradePercent, int speedLimit, double distanceLimit, boolean journal, boolean warm) {
-        ArrayList<TrainMotion> accelList = new ArrayList<>();
-        ArrayList<TrainMotion> cruiseList = new ArrayList<>();
-        ArrayList<TrainMotion> decelList = new ArrayList<>();
+    static List<TrainMotion> getTrainMotions(
+            List<Engine> engines, List<Integer> carWeights, double gradePercent, int speedLimit,
+            double distanceLimit, boolean journal, boolean warm, boolean endStop, double priorSpeed) {
+        List<TrainMotion> trainMotionList = new ArrayList<>();
 
-        Map<Integer, List<TrainMotion>> motionMap = new HashMap<>();
-        motionMap.put(START, accelList);
-        motionMap.put(CRUISE, cruiseList);
-        motionMap.put(BRAKE, decelList);
+        List<TrainMotion> cruiseList = new ArrayList<>();
+        List<TrainMotion> decelList = new ArrayList<>();
 
         double fullPower = 0;
         double driverWeight = 0;
         double engineWeight = 0;
         if (engines == null) {
             System.out.println("Alert: engines is null in getTrainMotions()");
-            return motionMap;
+            return trainMotionList;
         } else {
             for (Engine engine : engines) {
                 fullPower += engine.getHpInteger();
@@ -356,51 +358,67 @@ public class TrainPhysics implements Serializable {
             }
         }
 
-        // TODO EWS expect a proper initial condition for route when previous route does not stop at its endpoint! If so, do not do stretch...start with last train motion and then adjust speed as needed
-        accelList.add(TrainMotion.ZERO);
-        TrainMotion stretchTrainMotion = getStretchMotion(driverWeight, engineWeight, carWeights, fullPower, gradePercent, journal, warm);
-        accelList.add(stretchTrainMotion);
+        TrainMotion priorTrainMotion = new TrainMotion();
+        trainMotionList.add(priorTrainMotion);
+        if (priorSpeed > 0) {
+            priorTrainMotion.v = priorSpeed;
+            if (speedLimit < priorSpeed) {
+                priorTrainMotion = getTrainMotionAfterDeceleration(trainMotionList, priorTrainMotion, driverWeight, engineWeight, carWeights, gradePercent, fullPower, distanceLimit, speedLimit);
+            } else if (priorSpeed < speedLimit) {
+                priorTrainMotion = getTrainMotionAfterAcceleration(trainMotionList, priorTrainMotion, driverWeight, engineWeight, carWeights, gradePercent, fullPower, distanceLimit, speedLimit);
+            }
+        } else {
+            priorTrainMotion = getStretchMotion(driverWeight, engineWeight, carWeights, fullPower, gradePercent, journal, warm);
+            trainMotionList.add(priorTrainMotion);
 
-        TrainMotion priorTrainMotion = stretchTrainMotion;
-        priorTrainMotion = getTrainMotionAfterAcceleration(accelList, priorTrainMotion, driverWeight, engineWeight, carWeights, gradePercent, fullPower, distanceLimit, speedLimit);
-
-        priorTrainMotion = getTrainMotionAfterDeceleration(decelList, priorTrainMotion, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
+            priorTrainMotion = getTrainMotionAfterAcceleration(trainMotionList, priorTrainMotion, driverWeight, engineWeight, carWeights, gradePercent, fullPower, distanceLimit, speedLimit);
+        }
+        if (endStop) {
+            priorTrainMotion = getTrainMotionAfterDeceleration(decelList, priorTrainMotion, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit, 0);
+        }
         double totalTravelDistance = priorTrainMotion.x;
 
         // check total travel distance and reduce top speed as needed
-        while (distanceLimit < totalTravelDistance && accelList.size() > 2 && decelList.size() > 2) {
-            accelList.remove(accelList.size() - 1); // remove old accel top speed
+        while (distanceLimit < totalTravelDistance && trainMotionList.size() > 2 && decelList.size() > 2) {
+            trainMotionList.remove(trainMotionList.size() - 1); // remove old accel top speed
             decelList.remove(0); // remove old decel top speed
-            double x_AccelTopSpeed = accelList.get(accelList.size() - 1).x;
+            double x_AccelTopSpeed = trainMotionList.get(trainMotionList.size() - 1).x;
             double x_DecelTopSpeed = decelList.get(0).x;
             double travelDistanceReduction = x_DecelTopSpeed - x_AccelTopSpeed;
             totalTravelDistance -= travelDistanceReduction;
         }
 
         double cruiseDistance = distanceLimit - totalTravelDistance;
-        priorTrainMotion = accelList.get(accelList.size() - 1);
+        priorTrainMotion = trainMotionList.get(trainMotionList.size() - 1);
         TrainMotion cruiseMotion = cruiseMotion(priorTrainMotion, engineWeight, carWeights, fullPower, gradePercent, cruiseDistance);
         cruiseList.add(cruiseMotion);
 
-        double addedTime = cruiseMotion.t - accelList.get(accelList.size() - 1).t;
-        double addedDistance = cruiseMotion.x - accelList.get(accelList.size() - 1).x;
+        double addedTime = cruiseMotion.t - trainMotionList.get(trainMotionList.size() - 1).t;
+        double addedDistance = cruiseMotion.x - trainMotionList.get(trainMotionList.size() - 1).x;
         // update time and distances in decelerate train motions
         for (TrainMotion tm : decelList) {
             tm.t += addedTime;
             tm.x += addedDistance;
         }
 
-        return motionMap;
+        trainMotionList.addAll(cruiseList);
+        trainMotionList.addAll(decelList);
+
+        return trainMotionList;
+    }
+
+    public static boolean endStop(TrainRevenues trainRevenues, RouteLocation rl) {
+        return trainRevenues.getTrainPickUpsOrDropOffs().contains(rl.getId());
     }
 
     public static boolean isSI() {
         return Setup.getLengthUnit().equals(Setup.METER);
     }
 
-    private static TrainMotion getTrainMotionAfterDeceleration(ArrayList<TrainMotion> decelList, TrainMotion priorTrainMotion, double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double distanceLimit) {
-        int topSpeed = (int) Math.round(priorTrainMotion.v);
-        for (int newSpeed = topSpeed - 1; newSpeed >= 0; newSpeed--) {
-            TrainMotion newTrainMotion = getNewTrainMotion(priorTrainMotion, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
+    private static TrainMotion getTrainMotionAfterDeceleration(List<TrainMotion> decelList, TrainMotion priorTrainMotion, double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double distanceLimit, double speedLimit) {
+        int newSpeed = (int) Math.round(priorTrainMotion.v);
+        for (int speed = newSpeed - 1; speed >= speedLimit; speed--) {
+            TrainMotion newTrainMotion = getNewTrainMotion(priorTrainMotion, speed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
             if (newTrainMotion == null) { // requested new speed value not achieved
                 break;
             } else {
@@ -411,7 +429,7 @@ public class TrainPhysics implements Serializable {
         return priorTrainMotion;
     }
 
-    private static TrainMotion getTrainMotionAfterAcceleration(ArrayList<TrainMotion> accelList, TrainMotion priorTrainMotion, double driverWeight, double engineWeight, List<Integer> carWeights, double gradePercent, double fullPower, double distanceLimit, int speedLimit) {
+    private static TrainMotion getTrainMotionAfterAcceleration(List<TrainMotion> accelList, TrainMotion priorTrainMotion, double driverWeight, double engineWeight, List<Integer> carWeights, double gradePercent, double fullPower, double distanceLimit, int speedLimit) {
         int topSpeed = 1 + (int) priorTrainMotion.v;
         for (int newSpeed = topSpeed; newSpeed <= speedLimit; newSpeed++) {
             TrainMotion newTrainMotion = getNewTrainMotion(priorTrainMotion, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
@@ -564,17 +582,24 @@ public class TrainPhysics implements Serializable {
         return Math.min(COUPLER_PULL_LIMIT_TONS, tractionForceLimit(driversWeight));
     }
 
-    public String getReportSummary() {
-        return reportSummary.toString();
-    }
-
     @Override
     public String toString() {
         return "TrainPhysics Summary Report {" + reportSummary + '}';
     }
 
+    private TrainMotion priorTrainMotion(Train train, RouteLocation rl) {
+        for (RouteLocation rlPrior : train.getRoute().getLocationsBySequenceList()) {
+            if (rlPrior.getSequenceNumber() == rl.getSequenceNumber() - 1) {
+                List<TrainMotion> trainMotionList = trainMotionMap.get(rlPrior);
+                return trainMotionList.get(trainMotionList.size() - 1);
+            }
+        }
+
+        return new TrainMotion();
+    }
+
     private void updateMotionReport(Train train, RouteLocation rl, boolean detailed) {
-        Map<Integer, List<TrainMotion>> motionMap = motionMaps.get(rl);
+        List<TrainMotion> trainMotionList = trainMotionMap.get(rl);
 
         TrainRevenues trainRevenues = train.getTrainRevenues();
         String rlId = rl.getId();
@@ -616,32 +641,43 @@ public class TrainPhysics implements Serializable {
         double carsWeight = carWeights.stream().mapToInt(w -> w).sum();
         double totalWeight = engineWeight + carsWeight;
 
-        if (motionMap.isEmpty()) {
+        if (trainMotionList.isEmpty()) {
             reportSummary.append(String.format("\n\tNo motion for engine model %s:" + "\n\t\tfull power = %5.3f (HP)" + "\n\t\tdriver weight = %5.3f (tons)" + "\n\t\tengine weight = %5.3f (tons)" + "\n\t\ttrain weight = %5.3f (tons)" + "\n\t\tgrade = %5.3f%%\n", engineModel, fullPower, driverWeight, engineWeight, totalWeight, gradePercent));
         } else {
-            int motionCount = 0;
+            int motionCount = trainMotionList.size();
+            int endAccelIndex = 0;
+            for (TrainMotion tm : trainMotionList) {
+                if (tm.a > 0) {
+                    endAccelIndex++;
+                }
+            }
 
-            List<TrainMotion> accelTrainMotions = motionMap.get(START);
             double maxAccelerationThrottle = 0;
             double maxAccelerationBrake = 0;
-            motionCount += accelTrainMotions.size();
-            for (TrainMotion tm : accelTrainMotions) {
+            List<TrainMotion> accelTmList = trainMotionList.subList(0, endAccelIndex + 1);
+            for (TrainMotion tm : accelTmList) {
                 maxAccelerationThrottle = Math.max(maxAccelerationThrottle, tm.tp);
                 maxAccelerationBrake = Math.max(maxAccelerationBrake, tm.bp);
             }
 
-            double accelStartTime = accelTrainMotions.get(0).t;
-            double accelFinishTime = accelTrainMotions.get(accelTrainMotions.size() - 1).t;
+            double accelStartTime = trainMotionList.get(0).t;
+            double accelFinishTime = trainMotionList.get(endAccelIndex).t;
             double accelElapsedTime = accelFinishTime - accelStartTime;
 
-            List<TrainMotion> cruiseTrainMotions = motionMap.get(CRUISE);
-            TrainMotion ctm = cruiseTrainMotions.get(0);
-            double cruiseThrottle = ctm.tp;
-            double cruiseBrake = ctm.bp;
-            double cruiseSpeedTime = ctm.t - accelFinishTime;
-            motionCount += cruiseTrainMotions.size();
+            TrainMotion ctm;
+            double cruiseThrottle = 0;
+            double cruiseBrake = 0;
+            double cruiseSpeedTime = 0;
+            if (endAccelIndex < trainMotionList.size()) {
+                ctm  = trainMotionList.get(endAccelIndex + 1);
+                cruiseThrottle = ctm.tp;
+                cruiseBrake = ctm.bp;
+                cruiseSpeedTime = ctm.t - accelFinishTime;
+            } else {
+                ctm = trainMotionList.get(endAccelIndex);
+            }
 
-            List<TrainMotion> decelTrainMotions = motionMap.get(BRAKE);
+            List<TrainMotion> decelTrainMotions = trainMotionList.subList(endAccelIndex + 2, trainMotionList.size());
 
             double maxDecelerationThrottle = 0;
             double maxDecelerationBrake = 0;
@@ -650,9 +686,15 @@ public class TrainPhysics implements Serializable {
                 maxDecelerationThrottle = Math.max(maxDecelerationThrottle, tm.tp);
                 maxDecelerationBrake = Math.max(maxDecelerationBrake, tm.bp);
             }
-            double decelerationTime = decelTrainMotions.get(decelTrainMotions.size() - 1).t - ctm.t;
+            double decelerationTime = 0;
+            TrainMotion finalTrainMotion;
+            if (!decelTrainMotions.isEmpty()) {
+                decelerationTime = decelTrainMotions.get(decelTrainMotions.size() - 1).t - ctm.t;
+                finalTrainMotion = decelTrainMotions.get(decelTrainMotions.size() - 1);
+            } else {
+                finalTrainMotion = trainMotionList.get(trainMotionList.size() - 1);
+            }
 
-            TrainMotion finalTrainMotion = decelTrainMotions.get(decelTrainMotions.size() - 1);
             double totalSeconds = finalTrainMotion.t;
             double totalDistance = finalTrainMotion.x;
 
@@ -661,7 +703,8 @@ public class TrainPhysics implements Serializable {
             double totalHours = totalSeconds / SEC_PER_HOUR;
             double averageSpeed = totalDistance / totalHours;
 
-            String note = endStop(rl, trainRevenues) ? "" : "n't";
+            boolean endStop = endStop(trainRevenues, rl);
+            String note = endStop ? "" : "n't";
 
             StringBuilder thisSummary = new StringBuilder();
             thisSummary.append(String.format("\n\t\tRoute segment %s: %.0f mile distance in %s (HH:MM:SS), %s, under a %.0f MPH speed limit, end stop is%s required", rl.getSequenceNumber(), totalDistance, timeString(totalSeconds), gradeString, speedLimit, note));
@@ -674,20 +717,14 @@ public class TrainPhysics implements Serializable {
 
             if (detailed) {
                 thisSummary.append(String.format("TrainMotion: %d steps {\n\t%s\n", motionCount, TrainMotion.getMotionsHeader()));
-                for (int i = 0; i < 3; i++) {
-                    for (TrainMotion tm : motionMap.get(i)) {
-                        thisSummary.append("\t").append(tm.getMotionData()).append('\n');
-                    }
+                for (TrainMotion tm : trainMotionList) {
+                    thisSummary.append("\t").append(tm.getMotionData()).append('\n');
                 }
                 thisSummary.append("\t}\n");
             }
 
             reportSummary.append(thisSummary);
         }
-    }
-
-    private boolean endStop(RouteLocation rl, TrainRevenues trainRevenues) {
-        return trainRevenues.getTrainPickUpsOrDropOffs().contains(rl.getId());
     }
 
     /**

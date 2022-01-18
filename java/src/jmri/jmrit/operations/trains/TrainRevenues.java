@@ -25,10 +25,10 @@ import java.util.function.Function;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainRevenues implements Serializable {
+    private static final long serialVersionUID = 4L;
+
     public static final int ORIG = 0;
     public static final int TERM = 1;
-
-    private static final long serialVersionUID = 4L;
 
     private final Map<String, Map<String, CarRevenue>> carRevenueMapByCarId = new TreeMap<>();
     private final Map<String, Map<String, Integer>> spurCapacityMapByCustomer = new HashMap<>();
@@ -37,9 +37,9 @@ public class TrainRevenues implements Serializable {
     private final Set<String> trainPickUpOrDropOff = new TreeSet<>();
     private final Map<String, List<Engine>> trainEngines = new HashMap<>();
     private final Map<String, List<Integer>> trainCarWeights = new HashMap<>();
+    private final Map<String, String[]> origTrackIdsByCarId = new HashMap<>();
 
     private transient Train train;
-    private Map<String, String[]> origTrackIdsByCarId;
     private BigDecimal maxRouteTransportFee = BigDecimal.ZERO;
 
     public TrainRevenues(Train train) {
@@ -163,7 +163,6 @@ public class TrainRevenues implements Serializable {
     }
 
     public void loadOrigTrackIdsByCarId() {
-        origTrackIdsByCarId = new HashMap<>();
         for (Car car : InstanceManager.getDefault(CarManager.class).getList(train)) {
             if (!car.isCaboose() && !car.isPassenger()) {
                 String[] ids = new String[2];
@@ -476,7 +475,8 @@ public class TrainRevenues implements Serializable {
                 }
                 trainEngines.computeIfAbsent(rl.getId(), k -> new ArrayList<>());
                 trainEngines.get(rl.getId()).add(engine);
-                trainCarWeights.put(rl.getId(), trainCarWeights(rl));
+                List<Integer> trainCarWeights = trainCarWeights(rl);
+                this.trainCarWeights.put(rl.getId(), trainCarWeights);
             }
         }
     }

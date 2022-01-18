@@ -16,6 +16,11 @@ public class Consist extends RollingStockGroup<Engine> implements Serializable {
 
     protected int _consistNumber = 0;
 
+    public Consist() {
+        super("unnamed");
+        log.debug("New Consist ({})", "unnamed");
+    }
+
     public Consist(String name) {
         super(name);
         log.debug("New Consist ({})", name);

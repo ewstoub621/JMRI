@@ -1,7 +1,6 @@
 package jmri.jmrit.operations.trains;
 
 public class TrainMotion {
-    static final TrainMotion ZERO = new TrainMotion();
 
     double dt; // seconds
     double t; // seconds
@@ -13,7 +12,7 @@ public class TrainMotion {
     double tp; // % of maximum power
     double bp; // % of maximum brake
 
-    private TrainMotion() {
+    TrainMotion() {
         this.dt = 0;
         this.t = 0;
         this.x = 0;

@@ -22,6 +22,7 @@ import jmri.jmrit.roster.RosterEntry;
  * @author Daniel Boudreau (C) Copyright 2008
  */
 public class Engine extends RollingStock implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     public static final int NCE_REAR_BLOCK_NUMBER = 8;
     public static final int B_UNIT_BLOCKING = 10; // block B Units after NCE Consists
