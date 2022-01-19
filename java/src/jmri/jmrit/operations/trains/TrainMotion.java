@@ -36,21 +36,25 @@ public class TrainMotion {
         this.bp = bp;
     }
 
-    static String timeString(double seconds) {
+    static String timeString_12_Char(double seconds) {
+        return String.format("%02.0f:%02.0f:%06.3f", seconds / 3600, (seconds % 3600) / 60, (seconds % 60));
+    }
+
+    static String timeString_8_Char(double seconds) {
         return String.format("%02.0f:%02.0f:%02.0f", seconds / 3600, (seconds % 3600) / 60, (seconds % 60));
     }
 
     static String getMotionsHeader() {
-        return String.format("%9s,%9s,%8s,%7s,%7s,%8s,%9s,%9s,%7s,", "∆time", "time", "miles", "mph", "mph/s", "force", "power", "throttle", "brake");
+        return String.format("%12s,%9s,%8s,%7s,%7s,%8s,%9s,%9s,%7s,", "delta time", "time", "miles", "mph", "mph/s", "force", "power", "throttle", "brake");
     }
 
     public String getMotionData() {
         return String.format("%9s,%9s,%8.4f,%7.3f,%7.3f,%7.2fT,%7.1fHP,%8.1f%%,%6.1f%%,",
-                timeString(dt), timeString(t), x, v, a, f, p, tp, bp);
+                timeString_12_Char(dt), timeString_8_Char(t), x, v, a, f, p, tp, bp);
     }
 
     public String getRawMotionData() {
-        return String.format("%9.4f,%9.3f,%8.4f,%7.3f,%7.3f,%7.2fT,%7.1fHP,%8.1f%%,%6.1f%%,",
+        return String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,",
                 dt, t, x, v, a, f, p, tp, bp);
     }
 

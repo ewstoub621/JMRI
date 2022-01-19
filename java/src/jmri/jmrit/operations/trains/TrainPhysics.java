@@ -7,11 +7,10 @@ import jmri.jmrit.operations.setup.Setup;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-import static jmri.jmrit.operations.trains.TrainMotion.timeString;
+import static jmri.jmrit.operations.trains.TrainMotion.timeString_12_Char;
+import static jmri.jmrit.operations.trains.TrainMotion.timeString_8_Char;
 
 /**
  * These calculators are partly based on http://evilgeniustech.com/idiotsGuideToRailroadPhysics/TheBasics/
@@ -25,39 +24,44 @@ import static jmri.jmrit.operations.trains.TrainMotion.timeString;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainPhysics implements Serializable {
-    // basic constant values
-    protected static final double BRAKE_DESIGN_LIMIT = 0.75;
+    // private basic constant values
+    private static final double BRAKE_DESIGN_LIMIT = 0.75;
+    private static final double FEET_PER_MILE = 5280.0;
+    private static final double FLANGE_ADHESION_PER_KMPH = 0.00008; // steel flange sliding against steel rail face, per Kmph (speed)
+    private static final double FT_LBS_PER_SEC_PER_HP = 550;
+    private static final double G_SI = 9.80665; // gravitational acceleration in meters/sec/sec
+    private static final double G_US = 32.174; // gravitational acceleration in feet/sec/sec
+    private static final double KG_PER_LB = 0.45359237;
+    private static final double KM_PER_METER = 1000.0;
+    private static final double METERS_PER_FOOT = 0.0254 * 12.0; // 0.3048
+    private static final double MINIMUM_ACCELERATION = 0.01;
+    private static final double POWER_EFFICIENCY = 0.72; // factor especially for F7-A locomotives
+    private static final double SEC_PER_HOUR = 3600.0;
+    private static final double SLACK_PER_CAR_FEET = 1.8; // couplers plus drawbars
+    private static final double STATIC_ADHESION = 0.0016; // rolling steel wheel on steel rail
+    private static final double STRETCH_SPEED_LIMIT_MPH = 2.0;
+    private static final double TON_FORCE_BY_KMH_PER_NEWTON = 2650;
+    private static final double WATTS_PER_HP = 745.7;
+    private static final double WHEEL_TRACK_ADHESION = 0.25; // coefficient for steel wheel on sanded steel rail
+    // protected basic constant values
     protected static final double COUPLER_PULL_LIMIT_TONS = 125; // working limit for older coupler knuckles
-    protected static final double FEET_PER_MILE = 5280.0;
-    protected static final double FLANGE_ADHESION_PER_KMPH = 0.00008; // steel flange sliding against steel rail face, per Kmph (speed)
-    protected static final double FT_LBS_PER_SEC_PER_HP = 550;
-    protected static final double G_SI = 9.80665; // gravitational acceleration in meters/sec/sec
-    protected static final double G_US = 32.174; // gravitational acceleration in feet/sec/sec
-    protected static final double KG_PER_LB = 0.45359237;
-    protected static final double KM_PER_METER = 1000.0;
     protected static final double LBS_PER_TON = 2000.0;
-    protected static final double METERS_PER_FOOT = 0.0254 * 12.0; // 0.3048
-    protected static final double MINIMUM_ACCELERATION = 0.01;
-    protected static final double POWER_EFFICIENCY = 0.72; // factor especially for F7-A locomotives
-    protected static final double SEC_PER_HOUR = 3600.0;
-    protected static final double SLACK_PER_CAR_FEET = 1.8; // couplers plus drawbars
-    protected static final double STATIC_ADHESION = 0.0016; // rolling steel wheel on steel rail
     protected static final double STEAMER_DRIVER_WEIGHT_PER_ENGINE_WEIGHT = 0.35;
-    protected static final double STRETCH_SPEED_LIMIT_MPH = 2.0;
-    protected static final double WATTS_PER_HP = 745.7;
-    protected static final double WHEEL_TRACK_ADHESION = 0.25; // coefficient for steel wheel on sanded steel rail
-    // derived constants and conversion factors
-    protected static final double METERS_PER_MILE = FEET_PER_MILE * METERS_PER_FOOT; // ~1609.344
-    protected static final double MILES_PER_KM = KM_PER_METER / METERS_PER_MILE; // ~0.621371
-    protected static final double MPH_PER_MPS = SEC_PER_HOUR / METERS_PER_MILE;// ~2.236936
-    protected static final double MPH_PER_FPS = SEC_PER_HOUR / FEET_PER_MILE; // ~0.681818
-    protected static final double NEWTONS_PER_LB = KG_PER_LB * G_SI;// ~4.4482
-    protected static final double NEWTONS_PER_TON = NEWTONS_PER_LB * LBS_PER_TON; // ~8896.44
-    protected static final double STRETCH_SPEED_LIMIT_FPS = STRETCH_SPEED_LIMIT_MPH / MPH_PER_FPS;
+    // private derived constants and conversion factors
+    private static final double BRAKE_APPLICATION_LIMIT = 0.25 * BRAKE_DESIGN_LIMIT;
+    private static final double METERS_PER_MILE = FEET_PER_MILE * METERS_PER_FOOT; // ~1609.344
+    private static final double MILES_PER_KM = KM_PER_METER / METERS_PER_MILE; // ~0.621371
+    private static final double MPH_PER_MPS = SEC_PER_HOUR / METERS_PER_MILE;// ~2.236936
+    private static final double MPH_PER_FPS = SEC_PER_HOUR / FEET_PER_MILE; // ~0.681818
+    private static final double NEWTONS_PER_LB = KG_PER_LB * G_SI;// ~4.4482
+    private static final double NEWTONS_PER_TON = NEWTONS_PER_LB * LBS_PER_TON; // ~8896.44
+    private static final double STRETCH_SPEED_LIMIT_FPS = STRETCH_SPEED_LIMIT_MPH / MPH_PER_FPS;
+    // protected derived constants and conversion factors
+    protected static final double TON_FORCE_BY_MPH_PER_HP = TON_FORCE_BY_KMH_PER_NEWTON * POWER_EFFICIENCY * MILES_PER_KM / NEWTONS_PER_TON;
 
     private static final long serialVersionUID = 1L;
     private final StringBuilder reportSummary = new StringBuilder();
-    private final Map<RouteLocation, List<TrainMotion>> trainMotionMap = new HashMap<>();
+    private final List<TrainMotion> routeTrainMotions = new ArrayList<>();
 
     public TrainPhysics(Train train, boolean detailed) {
         Route route = train.getRoute();
@@ -66,10 +70,14 @@ public class TrainPhysics implements Serializable {
 
         for (RouteLocation rl : route.getLocationsBySequenceList()) {
             if (rl.getTrainWeight() > 0 && rl.getTrainLength() > 0) {
-                TrainMotion priorTm = priorTrainMotion(train, rl);
+                TrainMotion priorTm = routeTrainMotions.isEmpty() ? new TrainMotion() : routeTrainMotions.get(routeTrainMotions.size() - 1);
                 List<TrainMotion> trainMotionList = getTrainMotions(train, rl, journal, warm, priorTm.v);
-                trainMotionMap.put(rl, trainMotionList);
-                updateMotionReport(train, rl, detailed);
+                for (TrainMotion tm : trainMotionList) {
+                    tm.t += priorTm.t;
+                    tm.x += priorTm.x;
+                }
+                routeTrainMotions.addAll(trainMotionList);
+                updateMotionReport(train, rl, detailed, trainMotionList);
             }
         }
     }
@@ -131,7 +139,7 @@ public class TrainPhysics implements Serializable {
     static TrainMotion getNewTrainMotion(TrainMotion priorTrainMotion, double newSpeed, double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double distanceLimit) {
         double carsWeight = carWeights.stream().mapToInt(w -> w).sum();
         double totalWeight = engineWeight + carsWeight;
-        double brakingForceLimit = brakingForceLimit(totalWeight);
+        double brakingForceDesignLimit = brakingForceDesignLimit(totalWeight);
 
         double t_0 = priorTrainMotion.t; // seconds
         double x_0 = priorTrainMotion.x; // miles
@@ -165,7 +173,7 @@ public class TrainPhysics implements Serializable {
             double throttle = 100 * appliedPower / fullPower;
             return new TrainMotion(dt, t_1, x_1, newSpeed, a_x, netForce, appliedPower, throttle, 0);
         } else {
-            double brake = Math.abs(100 * availTractiveForce / brakingForceLimit);
+            double brake = Math.abs(100 * availTractiveForce / brakingForceDesignLimit);
             return new TrainMotion(dt, t_1, x_1, newSpeed, a_x, netForce, 0, 0, brake);
         }
     }
@@ -277,7 +285,7 @@ public class TrainPhysics implements Serializable {
             throttle = 100 * appliedHp / fullPower;
         } else {
             appliedHp = 0;
-            brake = 100 * appliedForce / brakingForceLimit(totalWeight);
+            brake = 100 * appliedForce / brakingForceDesignLimit(totalWeight);
         }
         return new TrainMotion(t, t, x / FEET_PER_MILE, v * MPH_PER_FPS, a * MPH_PER_FPS, appliedForce, appliedHp, throttle, brake);
     }
@@ -290,7 +298,7 @@ public class TrainPhysics implements Serializable {
      * @return the calculated tractive force: if SI units, in Newtons, else in tons
      */
     static double getTractiveForce(double appliedPower, double speed) {
-        return 2650 * POWER_EFFICIENCY / speed * MILES_PER_KM * appliedPower / NEWTONS_PER_TON; // tons;
+        return TON_FORCE_BY_MPH_PER_HP / speed * appliedPower; // tons;
     }
 
     /**
@@ -301,10 +309,10 @@ public class TrainPhysics implements Serializable {
      * the acceleration sequence, ending with brunching the train, the very opposite of the stretching motion, and
      * finally coming to a stop at the given route segment end point.
      *
-     * @param train   Train instance en route
-     * @param rl      current route location
-     * @param journal type of bearing: false for roller, true for journal
-     * @param warm    bearing temp: false for below freezing, true for above freezing
+     * @param train      Train instance en route
+     * @param rl         current route location
+     * @param journal    type of bearing: false for roller, true for journal
+     * @param warm       bearing temp: false for below freezing, true for above freezing
      * @param priorSpeed
      * @return Map of TrainMotion lists traversing a route location in 3 phases (ACCEL, CRUISE, DECEL)
      */
@@ -336,9 +344,7 @@ public class TrainPhysics implements Serializable {
      * @param priorSpeed
      * @return Map of TrainMotion lists traversing a route location in 3 phases (ACCEL, CRUISE, DECEL)
      */
-    static List<TrainMotion> getTrainMotions(
-            List<Engine> engines, List<Integer> carWeights, double gradePercent, int speedLimit,
-            double distanceLimit, boolean journal, boolean warm, boolean endStop, double priorSpeed) {
+    static List<TrainMotion> getTrainMotions(List<Engine> engines, List<Integer> carWeights, double gradePercent, int speedLimit, double distanceLimit, boolean journal, boolean warm, boolean endStop, double priorSpeed) {
         List<TrainMotion> trainMotionList = new ArrayList<>();
 
         List<TrainMotion> cruiseList = new ArrayList<>();
@@ -471,10 +477,9 @@ public class TrainPhysics implements Serializable {
     }
 
     private static double availTractiveForce(double driverWeight, double fullPower, double totalWeight, double v_0, boolean accelerate) {
-        double accelForceLimit = Math.min(tractiveForceLimit(driverWeight), getTractiveForce(fullPower, v_0));
-        double brakingForceLimit = brakingForceLimit(totalWeight);
-
-        return accelerate ? accelForceLimit : brakingForceLimit;
+        return accelerate
+                ? Math.min(tractiveForceLimit(driverWeight), getTractiveForce(fullPower, v_0))
+                : brakingForceSafetyLimit(totalWeight);
     }
 
     /**
@@ -485,15 +490,26 @@ public class TrainPhysics implements Serializable {
      * @param totalWeight weight load available for braking force
      * @return the calculated braking force in the same units as the weight
      */
-    private static double brakingForceLimit(double totalWeight) {
+    private static double brakingForceDesignLimit(double totalWeight) {
         return WHEEL_TRACK_ADHESION * BRAKE_DESIGN_LIMIT * totalWeight;
+    }
+
+    /**
+     * Typically, all the weight of the train puts adhesive pressure on the rails by wheels, and all axles have braking
+     * capability. The safe braking limit is the maximum applied braking force limit used for safety considerations.
+     *
+     * @param totalWeight weight load available for braking force
+     * @return the calculated braking force in the same units as the weight
+     */
+    private static double brakingForceSafetyLimit(double totalWeight) {
+        return WHEEL_TRACK_ADHESION * BRAKE_APPLICATION_LIMIT * totalWeight;
     }
 
     private static TrainMotion cruiseMotion(TrainMotion priorTrainMotion, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double cruiseDistance) {
         double carsWeight = carWeights.stream().mapToInt(w -> w).sum();
         double totalWeight = engineWeight + carsWeight;
         // parameters for cruise (constant speed motion)
-        double brakingForceLimit = brakingForceLimit(totalWeight);
+        double brakingForceLimit = brakingForceSafetyLimit(totalWeight);
         double priorDistance = priorTrainMotion.x;
         double cruiseSpeed = priorTrainMotion.v;
         double cruiseTime = 3600 * cruiseDistance / cruiseSpeed;
@@ -582,25 +598,28 @@ public class TrainPhysics implements Serializable {
         return Math.min(COUPLER_PULL_LIMIT_TONS, tractionForceLimit(driversWeight));
     }
 
+    public List<TrainMotion> getRouteTrainMotions() {
+        return routeTrainMotions;
+    }
+
     @Override
     public String toString() {
         return "TrainPhysics Summary Report {" + reportSummary + '}';
     }
 
-    private TrainMotion priorTrainMotion(Train train, RouteLocation rl) {
-        for (RouteLocation rlPrior : train.getRoute().getLocationsBySequenceList()) {
-            if (rlPrior.getSequenceNumber() == rl.getSequenceNumber() - 1) {
-                List<TrainMotion> trainMotionList = trainMotionMap.get(rlPrior);
-                return trainMotionList.get(trainMotionList.size() - 1);
+    /*
+        private TrainMotion priorTrainMotion(Train train, RouteLocation rl) {
+            for (RouteLocation rlPrior : train.getRoute().getLocationsBySequenceList()) {
+                if (rlPrior.getSequenceNumber() == rl.getSequenceNumber() - 1) {
+                    List<TrainMotion> trainMotionList = trainMotionMap.get(rlPrior);
+                    return trainMotionList.get(trainMotionList.size() - 1);
+                }
             }
+
+            return new TrainMotion();
         }
-
-        return new TrainMotion();
-    }
-
-    private void updateMotionReport(Train train, RouteLocation rl, boolean detailed) {
-        List<TrainMotion> trainMotionList = trainMotionMap.get(rl);
-
+    */
+    private void updateMotionReport(Train train, RouteLocation rl, boolean detailed, List<TrainMotion> trainMotionList) {
         TrainRevenues trainRevenues = train.getTrainRevenues();
         String rlId = rl.getId();
 
@@ -668,15 +687,16 @@ public class TrainPhysics implements Serializable {
             double cruiseThrottle = 0;
             double cruiseBrake = 0;
             double cruiseSpeedTime = 0;
+            ctm = trainMotionList.get(endAccelIndex + 1);
+            cruiseThrottle = ctm.tp;
+            cruiseBrake = ctm.bp;
+            cruiseSpeedTime = ctm.t - accelFinishTime;
+/*
             if (endAccelIndex < trainMotionList.size()) {
-                ctm  = trainMotionList.get(endAccelIndex + 1);
-                cruiseThrottle = ctm.tp;
-                cruiseBrake = ctm.bp;
-                cruiseSpeedTime = ctm.t - accelFinishTime;
             } else {
                 ctm = trainMotionList.get(endAccelIndex);
             }
-
+*/
             List<TrainMotion> decelTrainMotions = trainMotionList.subList(endAccelIndex + 2, trainMotionList.size());
 
             double maxDecelerationThrottle = 0;
@@ -707,13 +727,13 @@ public class TrainPhysics implements Serializable {
             String note = endStop ? "" : "n't";
 
             StringBuilder thisSummary = new StringBuilder();
-            thisSummary.append(String.format("\n\t\tRoute segment %s: %.0f mile distance in %s (HH:MM:SS), %s, under a %.0f MPH speed limit, end stop is%s required", rl.getSequenceNumber(), totalDistance, timeString(totalSeconds), gradeString, speedLimit, note));
+            thisSummary.append(String.format("\n\t\tRoute segment %s: %.0f mile distance in %s (HH:MM:SS), %s, under a %.0f MPH speed limit, end stop is%s required", rl.getSequenceNumber(), totalDistance, timeString_8_Char(totalSeconds), gradeString, speedLimit, note));
             thisSummary.append(String.format("\n\t\tTrain \"%s\": %.0f HP required; %d cars: %.0f tons; route average %.1f MPH", train.getName(), minHp, carWeights.size(), carsWeight, averageSpeed));
             thisSummary.append(String.format("\n\t\tDrive \"%s\", %.0f HP, %.0f ton engine weight (%s): %.0f tons on drivers, HPT = %3.1f", engineModel, fullPower, engineWeight, engineType, driverWeight, fullPower / totalWeight));
-            thisSummary.append(String.format("\n\t\t%-13s | %8s | %8s | %8s |", "Controls:", "start", "cruise", "finish"));
-            thisSummary.append(String.format("\n\t\t%-13s | %8s | %8s | %8s |", "HH:MM:SS:", timeString(accelElapsedTime), timeString(cruiseSpeedTime), timeString(decelerationTime)));
-            thisSummary.append(String.format("\n\t\t%-13s | %7.1f%% | %7.1f%% | %7.1f%% |", "Max Power:", maxAccelerationThrottle, cruiseThrottle, maxDecelerationThrottle));
-            thisSummary.append(String.format("\n\t\t%-13s | %7.1f%% | %7.1f%% | %7.1f%% |\n", "Max Brake:", maxAccelerationBrake, cruiseBrake, maxDecelerationBrake));
+            thisSummary.append(String.format("\n\t\t%-10s | %8s | %8s | %8s |", "Controls:", "start", "cruise", "finish"));
+            thisSummary.append(String.format("\n\t\t%-10s | %8s | %8s | %8s |", "HH:MM:SS:", timeString_8_Char(accelElapsedTime), timeString_8_Char(cruiseSpeedTime), timeString_8_Char(decelerationTime)));
+            thisSummary.append(String.format("\n\t\t%-10s | %7.1f%% | %7.1f%% | %7.1f%% |", "Max Power:", maxAccelerationThrottle, cruiseThrottle, maxDecelerationThrottle));
+            thisSummary.append(String.format("\n\t\t%-10s | %7.1f%% | %7.1f%% | %7.1f%% |\n", "Max Brake:", maxAccelerationBrake, cruiseBrake, maxDecelerationBrake));
 
             if (detailed) {
                 thisSummary.append(String.format("TrainMotion: %d steps {\n\t%s\n", motionCount, TrainMotion.getMotionsHeader()));

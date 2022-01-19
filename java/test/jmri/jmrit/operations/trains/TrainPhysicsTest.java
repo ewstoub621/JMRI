@@ -19,18 +19,6 @@ class TrainPhysicsTest {
     private static final boolean DEBUG = false;
 
     @Test
-    public void testAcceleration() {
-        double forceSI = 100; // Newtons (which are pretty wimpy units)
-        double weightSI = 100 * G_SI; // weight of 100 kg = 980.66 Newtons
-        double expectedAccelerationSI = 1.0; // in MPS, per second
-        double forceUS = forceSI / NEWTONS_PER_TON; // 0.01124045 tons in US
-        double weightUS = weightSI / NEWTONS_PER_TON; // 0.11023 tons
-        double expectedAccelerationUS = expectedAccelerationSI * MPH_PER_MPS; // 2.2369 MPH, per second
-        double calculatedAccelerationUS = getAcceleration(forceUS, weightUS);
-        assertEquals(expectedAccelerationUS, calculatedAccelerationUS, 0.001);
-    }
-
-    @Test
     public void testGetNewSpeedTrainMotion() {
         List<Integer> carWeights = buildCarWeights(TEN);
         int driverWeight = 115;
@@ -173,6 +161,11 @@ class TrainPhysicsTest {
         boolean warm = false;
 
         assertNotNull(getStretchMotion(driverWeight, engineWeight, carWeights, fullPower, gradePercent, journal, warm));
+    }
+
+    @Test
+    public void testGetTractiveForce() {
+        assertEquals(TON_FORCE_BY_MPH_PER_HP, getTractiveForce(20, 20));
     }
 
     @Test
