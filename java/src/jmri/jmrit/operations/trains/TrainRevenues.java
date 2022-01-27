@@ -30,29 +30,6 @@ public class TrainRevenues implements Serializable {
     public static final int ORIG = 0;
     public static final int TERM = 1;
 
-    private final Map<String, Map<String, CarRevenue>> carRevenueMapByCarId = new TreeMap<>();
-    private final Map<String, Map<String, Integer>> spurCapacityMapByCustomer = new HashMap<>();
-    private final Set<String> carIdsInDemur = new TreeSet<>();
-    private final Set<String> carIdsInMulctSet = new TreeSet<>();
-    private final Set<String> trainPickUpOrDropOff = new TreeSet<>();
-    private final Map<String, List<Engine>> trainEngines = new HashMap<>();
-    private final Map<String, List<Integer>> trainCarWeights = new HashMap<>();
-    private final Map<String, String[]> origTrackIdsByCarId = new HashMap<>();
-
-    private transient Train train;
-    private BigDecimal maxRouteTransportFee = BigDecimal.ZERO;
-
-    public TrainRevenues(Train train) {
-        this.train = train;
-    }
-
-    public static void deleteTrainRevenuesSerFile(Train train) {
-        File trainRevenuesSerFile = getTrainRevenuesSerFile(train);
-        if (trainRevenuesSerFile.exists()) {
-            trainRevenuesSerFile.delete();
-        }
-    }
-
     public static String getCustomer(Car car) {
         if (car.getTrack() == null) {
             if (car.getRouteLocation() == car.getRouteDestination() && car.getDestinationTrack() != null && car.getDestinationTrack().isSpur()) {
@@ -109,36 +86,34 @@ public class TrainRevenues implements Serializable {
         return InstanceManager.getDefault(TrainManagerXml.class).getTrainRevenuesSerFile(train);
     }
 
+    public static void deleteTrainRevenuesSerFile(Train train) {
+        File trainRevenuesSerFile = getTrainRevenuesSerFile(train);
+        if (trainRevenuesSerFile.exists()) {
+            trainRevenuesSerFile.delete();
+        }
+    }
+
     public static List<Car> sortCars(List<Car> cars) {
         cars.sort(Comparator.comparing((Function<Car, String>) RollingStock::getRoadName).thenComparing(RollingStock::getNumber));
 
         return cars;
     }
 
-    public Map<String, List<Integer>> getTrainCarWeights() { return trainCarWeights; }
+    private final Map<String, Map<String, CarRevenue>> carRevenueMapByCarId = new TreeMap<>();
+    private final Map<String, Map<String, Integer>> spurCapacityMapByCustomer = new HashMap<>();
+    private final Set<String> carIdsInDemur = new TreeSet<>();
+    private final Set<String> carIdsInMulctSet = new TreeSet<>();
+    private final Set<String> trainPickUpOrDropOff = new TreeSet<>();
+    private final Map<String, List<Engine>> trainEngines = new HashMap<>();
+    private final Map<String, String[]> origTrackIdsByCarId = new HashMap<>();
+    private final Map<String, List<Integer>> trainCarWeights = new HashMap<>();
+    private final Map<String, List<TrainMotion>> trainMotions = new HashMap<>();
+    private BigDecimal maxRouteTransportFee = BigDecimal.ZERO;
 
-    public Map<String, List<Engine>> getTrainEngines() { return trainEngines; }
+    private transient Train train;
 
-    public Set<String> getTrainPickUpsOrDropOffs() { return trainPickUpOrDropOff; }
-
-    public Train getTrain() {
-        return train;
-    }
-
-    public void setTrain(Train train) {
+    public TrainRevenues(Train train) {
         this.train = train;
-    }
-
-    public BigDecimal getMaxRouteTransportFee() {
-        return maxRouteTransportFee;
-    }
-
-    public Map<String, Map<String, Integer>> getSpurCapacityMapByCustomer() {
-        return spurCapacityMapByCustomer;
-    }
-
-    public Map<String, String[]> getOrigTrackIdsByCarId() {
-        return origTrackIdsByCarId;
     }
 
     public Collection<CarRevenue> getCarRevenues() {
@@ -162,6 +137,32 @@ public class TrainRevenues implements Serializable {
         return map;
     }
 
+    public BigDecimal getMaxRouteTransportFee() { return maxRouteTransportFee; }
+
+    public Map<String, String[]> getOrigTrackIdsByCarId() {
+        return origTrackIdsByCarId;
+    }
+
+    public Map<String, Map<String, Integer>> getSpurCapacityMapByCustomer() {
+        return spurCapacityMapByCustomer;
+    }
+
+    public Train getTrain() {
+        return train;
+    }
+
+    public void setTrain(Train train) {
+        this.train = train;
+    }
+
+    public Map<String, List<Integer>> getTrainCarWeights() { return trainCarWeights; }
+
+    public Map<String, List<Engine>> getTrainEngines() { return trainEngines; }
+
+    public Map<String, List<TrainMotion>> getTrainMotions() { return trainMotions; }
+
+    public Set<String> getTrainPickUpsOrDropOffs() { return trainPickUpOrDropOff; }
+
     public void loadOrigTrackIdsByCarId() {
         for (Car car : InstanceManager.getDefault(CarManager.class).getList(train)) {
             if (!car.isCaboose() && !car.isPassenger()) {
@@ -174,7 +175,7 @@ public class TrainRevenues implements Serializable {
         saveTrainRevenuesSerFile();
     }
 
-    public void updateCarRevenues(RouteLocation rl, RouteLocation rlNext) {
+    public void updateRouteLocationRevenues(RouteLocation rl, RouteLocation rlNext) {
         if (rl == null) {
             return;
         }
@@ -182,12 +183,44 @@ public class TrainRevenues implements Serializable {
         updateDemurCharges(rl);
         updateMulctCharges();
         updateTrainCharges(rl);
-        updateRouteLocationData(rl, rlNext);
+        updateTrainData(rl, rlNext);
+        updateTrainMotions(rl);
 
         if (rl != train.getTrainTerminatesRouteLocation()) {
             maxRouteTransportFee = maxRouteTransportFee.add(BigDecimal.valueOf(rl.getTransportFee()));
         }
         saveTrainRevenuesSerFile();
+    }
+
+    private TrainMotion getPriorRouteLocationFinalTrainMotion(RouteLocation rl) {
+        List<RouteLocation> list = train.getRoute().getLocationsBySequenceList();
+        for (int i = 1; i < list.size() - 1; i++) {
+            if (rl == list.get(i)) {
+                RouteLocation lastRl = list.get(i - 1);
+                List<TrainMotion> lastRlTrainMotions = trainMotions.get(lastRl.getId());
+                return TrainMotion.getFinalTrainMotion(lastRlTrainMotions);
+            }
+        }
+        return new TrainMotion();
+    }
+
+    private boolean isSpurPickUp(Car car, RouteLocation rl) {
+        if (car.getTrack() == null || !car.getTrack().isSpur() || !rl.getLocation().getTracksList().contains(car.getTrack())) {
+            return false;
+        }
+        if (rl.getLocation().getId().equals(car.getLastLocationId())) {
+            return true;
+        }
+
+        return car.getRouteLocation() == rl;
+    }
+
+    private boolean isSpurSetOut(Car car, RouteLocation rl) {
+        if (car.getDestinationTrack() == null || !car.getDestinationTrack().isSpur()) {
+            return false;
+        }
+
+        return car.getRouteDestination() == rl;
     }
 
     private CarRevenue carRevenue(Car car) {
@@ -198,6 +231,45 @@ public class TrainRevenues implements Serializable {
             return map.values().stream().filter(cr -> carId.equals(cr.getCarId())).findFirst().orElse(null);
         } else {
             return map.computeIfAbsent(customer, c -> new CarRevenue(carId, c, car.getLoadName()));
+        }
+    }
+
+    private List<Car> carsOnTracks(Location location) {
+        List<Car> cars = new ArrayList<>();
+
+        List<Track> tracksList = location.getTracksList();
+        for (Car car : InstanceManager.getDefault(CarManager.class).getList()) {
+            if (tracksList.contains(car.getTrack())) {
+                cars.add(car);
+            }
+        }
+
+        return cars;
+    }
+
+    private void hazardFeeCharges(Car car, CarRevenue carRevenue) {
+        if (!CarLoad.LOAD_TYPE_EMPTY.equals(car.getLoadType()) && car.isHazardous()) {
+            carRevenue.setHazardFeeCharges(BigDecimal.valueOf(Integer.parseInt(Setup.getHazardFee())));
+        }
+    }
+
+    private void saveTrainRevenuesSerFile() {
+        deleteTrainRevenuesSerFile(train);
+        OutputStream osFile, buffer;
+        ObjectOutput output;
+        try {
+            File file = InstanceManager.getDefault(TrainManagerXml.class).createTrainRevenuesSerFile(train);
+            osFile = new FileOutputStream(file);
+            buffer = new BufferedOutputStream(osFile);
+            output = new ObjectOutputStream(buffer);
+
+            output.writeObject(this);
+
+            output.close();
+            buffer.close();
+            osFile.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -260,49 +332,29 @@ public class TrainRevenues implements Serializable {
         }
     }
 
-    private boolean isSpurPickUp(Car car, RouteLocation rl) {
-        if (car.getTrack() == null || !car.getTrack().isSpur() || !rl.getLocation().getTracksList().contains(car.getTrack())) {
-            return false;
-        }
-        if (rl.getLocation().getId().equals(car.getLastLocationId())) {
-            return true;
-        }
-
-        return car.getRouteLocation() == rl;
-    }
-
-    private boolean isSpurSetOut(Car car, RouteLocation rl) {
-        if (car.getDestinationTrack() == null || !car.getDestinationTrack().isSpur()) {
-            return false;
-        }
-
-        return car.getRouteDestination() == rl;
-    }
-
-    private void saveTrainRevenuesSerFile() {
-        deleteTrainRevenuesSerFile(train);
-        OutputStream osFile, buffer;
-        ObjectOutput output;
-        try {
-            File file = InstanceManager.getDefault(TrainManagerXml.class).createTrainRevenuesSerFile(train);
-            osFile = new FileOutputStream(file);
-            buffer = new BufferedOutputStream(osFile);
-            output = new ObjectOutputStream(buffer);
-
-            output.writeObject(this);
-
-            output.close();
-            buffer.close();
-            osFile.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+    private void switchingCharges(Car car, CarRevenue carRevenue) {
+        Track currentTrack = car.getTrack();
+        Track destinyTrack = car.getDestinationTrack();
+        boolean currentTrackIsSpur = currentTrack != null && currentTrack.isSpur();
+        boolean destinyTrackIsSpur = destinyTrack != null && destinyTrack.isSpur();
+        if (currentTrackIsSpur || destinyTrackIsSpur) {
+            carRevenue.setSwitchingCharges(switchingChargeByLoadAndType(car));
         }
     }
 
-    private void hazardFeeCharges(Car car, CarRevenue carRevenue) {
-        if (!CarLoad.LOAD_TYPE_EMPTY.equals(car.getLoadType()) && car.isHazardous()) {
-            carRevenue.setHazardFeeCharges(BigDecimal.valueOf(Integer.parseInt(Setup.getHazardFee())));
+    private List<Integer> trainCarWeights(RouteLocation rl) {
+        List<Integer> carWeights = new ArrayList<>();
+        for (Car rs : InstanceManager.getDefault(CarManager.class).getList(train)) {
+            int carWeight = 0;
+            if (rs.getRouteLocation() == rl) {
+                carWeight += rs.getAdjustedWeightTons();
+            }
+            if (rs.getRouteDestination() == rl) {
+                carWeight -= rs.getAdjustedWeightTons();
+            }
+            carWeights.add(carWeight);
         }
+        return carWeights;
     }
 
     private void transportCharges(Car car, CarRevenue carRevenue) {
@@ -337,29 +389,6 @@ public class TrainRevenues implements Serializable {
         if (totalRouteFee > 0) {
             carRevenue.setTransportCharges(BigDecimal.valueOf(totalRouteFee));
         }
-    }
-
-    private void switchingCharges(Car car, CarRevenue carRevenue) {
-        Track currentTrack = car.getTrack();
-        Track destinyTrack = car.getDestinationTrack();
-        boolean currentTrackIsSpur = currentTrack != null && currentTrack.isSpur();
-        boolean destinyTrackIsSpur = destinyTrack != null && destinyTrack.isSpur();
-        if (currentTrackIsSpur || destinyTrackIsSpur) {
-            carRevenue.setSwitchingCharges(switchingChargeByLoadAndType(car));
-        }
-    }
-
-    private List<Car> carsOnTracks(Location location) {
-        List<Car> cars = new ArrayList<>();
-
-        List<Track> tracksList = location.getTracksList();
-        for (Car car : InstanceManager.getDefault(CarManager.class).getList()) {
-            if (tracksList.contains(car.getTrack())) {
-                cars.add(car);
-            }
-        }
-
-        return cars;
     }
 
     private void updateDemurCharges(RouteLocation rl) {
@@ -465,7 +494,7 @@ public class TrainRevenues implements Serializable {
         }
     }
 
-    private void updateRouteLocationData(RouteLocation rl, RouteLocation rlNext) {
+    private void updateTrainData(RouteLocation rl, RouteLocation rlNext) {
         for (Engine engine : InstanceManager.getDefault(EngineManager.class).getList(train)) {
             if (engine.getRouteLocation() == rl && engine.getRouteDestination() != rl) {
                 if (rlNext != null) {
@@ -481,19 +510,10 @@ public class TrainRevenues implements Serializable {
         }
     }
 
-    private List<Integer> trainCarWeights(RouteLocation rl) {
-        List<Integer> carWeights = new ArrayList<>();
-        for (Car rs : InstanceManager.getDefault(CarManager.class).getList(train)) {
-            int carWeight = 0;
-            if (rs.getRouteLocation() == rl) {
-                carWeight += rs.getAdjustedWeightTons();
-            }
-            if (rs.getRouteDestination() == rl) {
-                carWeight -= rs.getAdjustedWeightTons();
-            }
-            carWeights.add(carWeight);
-        }
-        return carWeights;
+    private void updateTrainMotions(RouteLocation rl) {
+        double priorSpeed = getPriorRouteLocationFinalTrainMotion(rl).v;
+        List<TrainMotion> tmList = TrainPhysics.getTrainMotions(train, rl, priorSpeed);
+        trainMotions.put(rl.getId(), tmList);
     }
 
 }

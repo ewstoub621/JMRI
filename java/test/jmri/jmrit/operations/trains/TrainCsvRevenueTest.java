@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.util.*;
 
+import static jmri.jmrit.operations.trains.TrainMotion.getFinalTrainMotion;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -32,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainCsvRevenueTest extends OperationsTestCase {
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = true;
     private static final String ID = "1";
     private static final int LENGTH = 1000;
     private static final int LOC_1 = 1;
@@ -507,7 +508,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         car.setTypeName(typeName);
     }
 
-    private void verifyRestartMoveRestoreCycle(Train train) {
+    private void verifyRestartRestoreMoveCycle(Train train) {
         assertTrue(trainManagerXml.getTrainRevenuesSerFile(train).exists());
 
         train.setTrainRevenues(null);
@@ -541,7 +542,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     break;
             }
             if (restartMove) {
-                verifyRestartMoveRestoreCycle(train);
+                verifyRestartRestoreMoveCycle(train);
             } else {
                 train.move();
             }
@@ -549,32 +550,66 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
 
         train.terminate();
         assertFalse(train.isBuilt());
-
+        TrainRevenues trainRevenues = train.getTrainRevenues();
+        assertNotNull(trainRevenues);
+        assertEquals(1, trainRevenues.getMaxRouteTransportFee().compareTo(BigDecimal.ZERO));
+/*
         TrainPhysics trainPhysics = new TrainPhysics(train, true);
         assertNotNull(trainPhysics);
         if (DEBUG && Locale.getDefault().equals(defaultLocale)) {
             System.out.println(trainPhysics);
         }
+*/
+        Map<String, List<TrainMotion>> trainMotions = trainRevenues.getTrainMotions();
+        assertFalse(trainMotions.isEmpty());
+        List<TrainMotion> thisMotionList;
+        String lastRlId = null;
+        String thisRlId;
+        for (Map.Entry<String, List<TrainMotion>> e : trainMotions.entrySet()) {
+            thisRlId = e.getKey();
+            thisMotionList = e.getValue();
+            if (thisMotionList != null && !thisMotionList.isEmpty()) {
+                TrainMotion startTrainMotion = thisMotionList.get(0);
+                TrainMotion finalTrainMotion = getFinalTrainMotion(thisMotionList);
+                boolean startMotionHasSpeed = 1 <= startTrainMotion.v;
+                boolean startMotionAtRest = TrainPhysics.endStop(trainRevenues, lastRlId);
+                assertEquals(startMotionAtRest, !startMotionHasSpeed, "route " + thisRlId + " has start speed fault");
+                boolean finalMotionHasSpeed = 1 <= finalTrainMotion.v;
+                boolean finalMotionAtRest = TrainPhysics.endStop(trainRevenues, thisRlId);
+                assertEquals(finalMotionAtRest, !finalMotionHasSpeed, "route " + thisRlId + " has final speed fault");
+            }
+            lastRlId = thisRlId;
+        }
 
         TreeMap<Integer, List<String>> csvRevenueAsTreeMap = getCsvRevenueAsTreeMap(train);
         List<String> lastRowValues = csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1);
         assertEquals(NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_REVENUE)), csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1).get(lastRowValues.size() - 1));
-        double lastT = 0;
-        double lastX = 0;
+/*
+        TrainMotion lastTm = trainPhysics.getRouteTrainMotions().get(0);
         if (DEBUG)
             System.out.println(TrainMotion.getMotionsHeader());
-        for (TrainMotion tm : trainPhysics.getRouteTrainMotions()) {
-            double thisT = tm.t;
-            assertTrue(lastT <= thisT);
-            lastT = thisT;
-
-            double thisX = tm.x;
-            assertTrue(lastX <= thisX);
-            lastX = thisX;
-
-            if (DEBUG)
-                System.out.println(tm.getMotionData());
+        for (TrainMotion thisTm : trainPhysics.getRouteTrainMotions()) {
+            if (DEBUG) {
+                System.out.println(thisTm.getMotionData());
+            }
+            assertTrue(lastTm.t <= thisTm.t);
+            assertTrue(lastTm.x <= thisTm.x);
+            assertTrue(Math.abs(lastTm.v - thisTm.v) <= 2, "big jump is speed:\nlastTm=" + lastTm + "\nthisTm=" + thisTm);
+            lastTm = thisTm;
         }
+*/
+        for (Map.Entry<String, List<TrainMotion>> e : trainRevenues.getTrainMotions().entrySet()) {
+            String rlId = e.getKey();
+            List<TrainMotion> trainMotionList = e.getValue();
+            if (!trainMotionList.isEmpty()) {
+                System.out.println(rlId);
+                System.out.println(TrainMotion.getMotionsHeader());
+                for (TrainMotion tm : trainMotionList) {
+                    System.out.println(tm.getMotionData());
+                }
+            }
+        }
+
     }
 
 }

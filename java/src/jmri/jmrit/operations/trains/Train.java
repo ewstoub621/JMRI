@@ -3120,7 +3120,7 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         RouteLocation rl = getCurrentRouteLocation();
         RouteLocation rlNext = getNextRouteLocation(rl);
         if (Setup.isSaveTrainRevenuesEnabled()) {
-            getTrainRevenues().updateCarRevenues(rl, rlNext);
+            getTrainRevenues().updateRouteLocationRevenues(rl, rlNext);
         }
 
         setCurrentLocation(rlNext);

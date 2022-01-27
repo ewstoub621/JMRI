@@ -5,7 +5,6 @@ import jmri.jmrit.operations.rollingstock.cars.Car;
 import jmri.jmrit.operations.rollingstock.cars.CarManager;
 import jmri.jmrit.operations.rollingstock.cars.CarRevenue;
 import jmri.jmrit.operations.setup.Setup;
-import jmri.jmrit.operations.trains.TrainRevenues;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 
@@ -24,6 +23,16 @@ import static jmri.jmrit.operations.trains.Train.NONE;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainCsvRevenue extends TrainCsvCommon {
+    // TODO EWS public constants en route to Setup variables...
+    public static final double BTU_PER_HP_SEC = 14.15;
+    public static final double BTU_PER_LB_COAL = 13000;
+    public static final double BTU_PER_LB_OIL = 18000;
+    public static final double LBS_PER_UNIT_COST_COAL = 25;
+    public static final double LBS_PER_UNIT_COST_OIL = 100;
+    // protected derived constants and conversion factors
+    protected static final double FUEL_COST_PER_HP_SEC_COAL = BTU_PER_HP_SEC / BTU_PER_LB_COAL / LBS_PER_UNIT_COST_COAL;
+    protected static final double FUEL_COST_PER_HP_SEC_OIL = BTU_PER_HP_SEC / BTU_PER_LB_OIL / LBS_PER_UNIT_COST_OIL;
+
     private static final int SWITCHING = 0;
     private static final int TRANSPORT = 1;
     private static final int HAZARDFEE = 2;
@@ -37,14 +46,39 @@ public class TrainCsvRevenue extends TrainCsvCommon {
     private static final Object REV = "REV";
     private static final Object RDR = "RDR";
 
+    private static String getCurrencyString(BigDecimal value) {
+        if (!isPositive(value)) {
+            return NONE;
+        }
+        Locale aDefault = Locale.getDefault();
+        NumberFormat numberFormat = NumberFormat.getCurrencyInstance(aDefault);
+
+        return numberFormat.format(value);
+    }
+
+    private static String getCurrencyString(String amount) {
+        return getCurrencyString(BigDecimal.valueOf(Double.parseDouble(amount)));
+    }
+
+    private static boolean isPositive(BigDecimal value) {
+        if (value == null) {
+            return false;
+        } else {
+            return value.compareTo(BigDecimal.ZERO) > 0;
+        }
+    }
+
     private final Map<String, Car> allCarsByCarId = new HashMap<>();
     private Train train;
     private Map<String, BigDecimal> customerDiscountRateMap;
     private Map<String, Set<CarRevenue>> carRevenuesByCustomer;
     private BigDecimal[] revenueValues;
+    private BigDecimal routeFuelCost;
     private TrainRevenues trainRevenues;
     private String noAction;
-
+    /*
+        private TrainPhysics trainPhysics;
+    */
     public TrainCsvRevenue(Train train) throws IOException {
         if (!Setup.isSaveTrainRevenuesEnabled() || train == null) {
             return;
@@ -53,6 +87,130 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         writeCsvRevenueFile(train);
         TrainRevenues.deleteTrainRevenuesSerFile(train);
     }
+
+    public BigDecimal getRouteFuelCost() {
+        if (routeFuelCost == null) {
+            setRouteFuelCost();
+        }
+        return routeFuelCost;
+    }
+
+    private String getActionString(CarRevenue carRevenue) {
+        Boolean pickup = carRevenue.isPickup();
+
+        return pickup == null
+                ? getNoAction()
+                : Bundle.getMessage(pickup ? "Pickup" : "SetOut");
+    }
+
+    private void setAllCarsByCarId() {
+        for (Car car : new HashSet<>(InstanceManager.getDefault(CarManager.class).getList())) {
+            allCarsByCarId.put(car.getId(), car);
+        }
+    }
+
+    private String getCarDescription(CarRevenue carRevenue) {
+        Car car = allCarsByCarId.get(carRevenue.getCarId());
+        if (carRevenue.getLoadName() == null) {
+            carRevenue.setLoadName(car.getLoadName());
+        }
+
+        return String.format("%-" + getNoAction().length() + "s : (%-5s) %-5s %-7s - %s",
+                getActionString(carRevenue),
+                carRevenue.getLoadName(),
+                car.getRoadName(),
+                car.getNumber(),
+                car.getTypeName()
+        );
+    }
+
+    private void setCarRevenueSetByCustomer() { carRevenuesByCustomer = trainRevenues.getCarRevenueSetByCustomer(); }
+
+    private void setCustomerDiscountRateMap() {
+        int maxCapacity = 1;
+        Map<String, Integer> customerCapacityMap = new HashMap<>();
+        for (Map.Entry<String, Map<String, Integer>> e : trainRevenues.getSpurCapacityMapByCustomer().entrySet()) {
+            String customer = e.getKey();
+            int customerCapacity = 0;
+            for (Integer spurLength : e.getValue().values()) {
+                customerCapacity += spurLength;
+            }
+            customerCapacityMap.put(customer, customerCapacity);
+            maxCapacity = Math.max(maxCapacity, customerCapacity);
+        }
+
+        BigDecimal numerator = BigDecimal.valueOf(Double.parseDouble(Setup.getMaxDiscount()));
+        BigDecimal denominator = BigDecimal.valueOf(100).multiply(BigDecimal.valueOf(maxCapacity));
+        BigDecimal multiplicand = numerator.divide(denominator, MathContext.DECIMAL128);
+
+        Map<String, BigDecimal> customerDiscountRateMap1 = new HashMap<>();
+        for (String customer : trainRevenues.getCarRevenueSetByCustomer().keySet()) {
+            Integer capacity = customerCapacityMap.get(customer);
+            if (capacity != null) {
+                BigDecimal spurCapacity = BigDecimal.valueOf(capacity);
+                BigDecimal value = multiplicand.multiply(spurCapacity);
+                customerDiscountRateMap1.put(customer, value);
+            }
+        }
+
+        customerDiscountRateMap = customerDiscountRateMap1;
+    }
+
+    private void setDefaultLocale() {
+        if (Locale.ENGLISH.equals(Locale.getDefault())) {
+            Locale.setDefault(Locale.US);
+            javax.swing.JComponent.setDefaultLocale(Locale.US);
+        }
+    }
+
+    private String getNoAction() {
+        if (noAction == null) {
+            int pickUpLen = Bundle.getMessage("Pickup").length();
+            int setOutLen = Bundle.getMessage("SetOut").length();
+            int max = Math.max(setOutLen, pickUpLen);
+
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < max; i++) {
+                sb.append('-');
+            }
+            noAction = sb.toString();
+        }
+        return noAction;
+    }
+
+    private String getPercentageString(BigDecimal value) {
+        return isPositive(value) ? getPercentFormat().format(value) : NONE;
+    }
+
+    private NumberFormat getPercentFormat() {
+        NumberFormat percentFormat = NumberFormat.getPercentInstance();
+        percentFormat.setMaximumFractionDigits(2);
+        percentFormat.setMinimumFractionDigits(2);
+
+        return percentFormat;
+    }
+
+    private void setRevenueValues() {
+        BigDecimal[] bigDecimals = new BigDecimal[TOTAL_COL + 1];
+        for (int i = SWITCHING; i <= TOTAL_COL; i++) {
+            bigDecimals[i] = BigDecimal.ZERO;
+        }
+        revenueValues = bigDecimals;
+    }
+
+    private void setRouteFuelCost() {
+        double fuelCosts = 0;
+//        for (double fuelCost : trainRevenues.getFuelCosts().values()) {
+//            fuelCosts += fuelCost;
+//        }
+        this.routeFuelCost = BigDecimal.valueOf(fuelCosts);
+    }
+
+    private void setTrain(Train train) { this.train = train; }
+/*
+    private void setTrainPhysics(Train train) { trainPhysics = new TrainPhysics(train); }
+*/
+    private void setTrainRevenues(Train train) { trainRevenues = train.getTrainRevenues(); }
 
     private void addBigDecimalValues(BigDecimal[] customerValues, BigDecimal[] carValues) {
         for (int i = SWITCHING; i <= TOTAL_COL; i++) {
@@ -80,101 +238,6 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         }
 
         return total;
-    }
-
-    private static String getCurrencyString(BigDecimal value) {
-        if (!isPositive(value)) {
-            return NONE;
-        }
-        Locale aDefault = Locale.getDefault();
-        NumberFormat numberFormat = NumberFormat.getCurrencyInstance(aDefault);
-
-        return numberFormat.format(value);
-    }
-
-    private static String getCurrencyString(String amount) {
-        return getCurrencyString(BigDecimal.valueOf(Double.parseDouble(amount)));
-    }
-
-    private static boolean isPositive(BigDecimal value) {
-        if (value == null) {
-            return false;
-        } else {
-            return value.compareTo(BigDecimal.ZERO) > 0;
-        }
-    }
-
-    private String getActionString(CarRevenue carRevenue) {
-        Boolean pickup = carRevenue.isPickup();
-
-        return pickup == null
-                ? getNoAction()
-                : Bundle.getMessage(pickup ? "Pickup" : "SetOut");
-    }
-
-    private String getCarDescription(CarRevenue carRevenue) {
-        Car car = allCarsByCarId.get(carRevenue.getCarId());
-        if (carRevenue.getLoadName() == null) {
-            carRevenue.setLoadName(car.getLoadName());
-        }
-
-        return String.format("%-" + getNoAction().length() + "s : (%-5s) %-5s %-7s - %s",
-                getActionString(carRevenue),
-                carRevenue.getLoadName(),
-                car.getRoadName(),
-                car.getNumber(),
-                car.getTypeName()
-        );
-    }
-
-    private Map<String, BigDecimal> getCustomerDiscountRateMap() {
-        int maxCapacity = 1;
-        Map<String, Integer> customerCapacityMap = new HashMap<>();
-        for (Map.Entry<String, Map<String, Integer>> e : trainRevenues.getSpurCapacityMapByCustomer().entrySet()) {
-            String customer = e.getKey();
-            int customerCapacity = 0;
-            for (Integer spurLength : e.getValue().values()) {
-                customerCapacity += spurLength;
-            }
-            customerCapacityMap.put(customer, customerCapacity);
-            maxCapacity = Math.max(maxCapacity, customerCapacity);
-        }
-
-        BigDecimal numerator = BigDecimal.valueOf(Double.parseDouble(Setup.getMaxDiscount()));
-        BigDecimal denominator = BigDecimal.valueOf(100).multiply(BigDecimal.valueOf(maxCapacity));
-        BigDecimal multiplicand = numerator.divide(denominator, MathContext.DECIMAL128);
-
-        Map<String, BigDecimal> customerDiscountRateMap = new HashMap<>();
-        for (String customer : trainRevenues.getCarRevenueSetByCustomer().keySet()) {
-            Integer capacity = customerCapacityMap.get(customer);
-            if (capacity != null) {
-                BigDecimal spurCapacity = BigDecimal.valueOf(capacity);
-                BigDecimal value = multiplicand.multiply(spurCapacity);
-                customerDiscountRateMap.put(customer, value);
-            }
-        }
-
-        return customerDiscountRateMap;
-    }
-
-    private NumberFormat getPercentFormat() {
-        NumberFormat percentFormat = NumberFormat.getPercentInstance();
-        percentFormat.setMaximumFractionDigits(2);
-        percentFormat.setMinimumFractionDigits(2);
-
-        return percentFormat;
-    }
-
-    private String getPercentageString(BigDecimal value) {
-        return isPositive(value) ? getPercentFormat().format(value) : NONE;
-    }
-
-    private BigDecimal[] loadBigDecimalZeroValues() {
-        BigDecimal[] bigDecimals = new BigDecimal[TOTAL_COL + 1];
-        for (int i = SWITCHING; i <= TOTAL_COL; i++) {
-            bigDecimals[i] = BigDecimal.ZERO;
-        }
-        return bigDecimals;
     }
 
     private BigDecimal[] loadCarCharges(CarRevenue carRevenue, BigDecimal discountRate) {
@@ -284,7 +347,11 @@ public class TrainCsvRevenue extends TrainCsvCommon {
             if (customerDiscountRate == null) {
                 customerDiscountRate = BigDecimal.ZERO;
             }
-            BigDecimal[] customerCharges = loadBigDecimalZeroValues();
+            BigDecimal[] bigDecimals = new BigDecimal[TOTAL_COL + 1];
+            for (int i = SWITCHING; i <= TOTAL_COL; i++) {
+                bigDecimals[i] = BigDecimal.ZERO;
+            }
+            BigDecimal[] customerCharges = bigDecimals;
 
             for (CarRevenue carRevenue : e.getValue()) {
                 addBigDecimalValues(customerCharges, loadCarCharges(carRevenue, customerDiscountRate));
@@ -340,35 +407,17 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         fileOut.println();
     }
 
-    private String getNoAction() {
-        if (noAction == null) {
-            int pickUpLen = Bundle.getMessage("Pickup").length();
-            int setOutLen = Bundle.getMessage("SetOut").length();
-            int max = Math.max(setOutLen, pickUpLen);
-
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < max; i++) {
-                sb.append('-');
-            }
-            noAction = sb.toString();
-        }
-        return noAction;
-    }
-
     private void setup(Train train) {
-        this.train = train;
-        trainRevenues = train.getTrainRevenues();
-        carRevenuesByCustomer = trainRevenues.getCarRevenueSetByCustomer();
-        customerDiscountRateMap = getCustomerDiscountRateMap();
-        for (Car car : new HashSet<>(InstanceManager.getDefault(CarManager.class).getList())) {
-            allCarsByCarId.put(car.getId(), car);
-        }
-        revenueValues = loadBigDecimalZeroValues();
-        if (Locale.ENGLISH.equals(Locale.getDefault())) {
-            Locale.setDefault(Locale.US);
-            javax.swing.JComponent.setDefaultLocale(Locale.US);
-        }
+        setTrain(train);
+        setTrainRevenues(train);
+        setCarRevenueSetByCustomer();
+        setCustomerDiscountRateMap();
+        setAllCarsByCarId();
+        setRevenueValues();
+        setDefaultLocale();
+//        setTrainPhysics(train);
     }
+
     private void writeCsvRevenueFile(Train train) throws IOException {
         File csvFile = InstanceManager.getDefault(TrainManagerXml.class).createTrainCsvRevenueFile(train);
         CSVPrinter fileOut = new CSVPrinter(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(csvFile), StandardCharsets.UTF_8)), CSVFormat.DEFAULT);
