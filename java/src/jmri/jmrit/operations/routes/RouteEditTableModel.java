@@ -42,7 +42,8 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
     private static final int WAIT_COLUMN = DROP_COLUMN + 1;
     private static final int TIME_COLUMN = WAIT_COLUMN + 1;
     private static final int MAXLENGTH_COLUMN = TIME_COLUMN + 1;
-    private static final int GRADE = MAXLENGTH_COLUMN + 1;
+    private static final int DEGREE_OF_CURVATURE = MAXLENGTH_COLUMN + 1;
+    private static final int GRADE = DEGREE_OF_CURVATURE + 1;
     private static final int TRANSPORT_FEE = GRADE + 1;
     private static final int TRAINICONX = TRANSPORT_FEE + 1;
     private static final int TRAINICONY = TRAINICONX + 1;
@@ -129,6 +130,7 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
         table.getColumnModel().getColumn(WAIT_COLUMN).setPreferredWidth(65);
         table.getColumnModel().getColumn(TIME_COLUMN).setPreferredWidth(65);
         table.getColumnModel().getColumn(MAXLENGTH_COLUMN).setPreferredWidth(75);
+        table.getColumnModel().getColumn(DEGREE_OF_CURVATURE).setPreferredWidth(50);
         table.getColumnModel().getColumn(GRADE).setPreferredWidth(50);
         table.getColumnModel().getColumn(TRANSPORT_FEE).setPreferredWidth(35);
         table.getColumnModel().getColumn(TRAINICONX).setPreferredWidth(35);
@@ -185,6 +187,8 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
                 return Bundle.getMessage("Time");
             case MAXLENGTH_COLUMN:
                 return Bundle.getMessage("MaxLength");
+            case DEGREE_OF_CURVATURE:
+                return Bundle.getMessage("DegreeOfCurvature");
             case GRADE:
                 return Bundle.getMessage("Grade");
             case TRANSPORT_FEE:
@@ -214,6 +218,7 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
             case MAXMOVES_COLUMN:
             case WAIT_COLUMN:
             case MAXLENGTH_COLUMN:
+            case DEGREE_OF_CURVATURE:
             case GRADE:
             case TRANSPORT_FEE:
             case TRAINICONX:
@@ -247,6 +252,7 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
             case WAIT_COLUMN:
             case TIME_COLUMN:
             case MAXLENGTH_COLUMN:
+            case DEGREE_OF_CURVATURE:
             case GRADE:
             case TRANSPORT_FEE:
             case TRAINICONX:
@@ -306,6 +312,8 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
             }
             case MAXLENGTH_COLUMN:
                 return Integer.toString(rl.getMaxTrainLength());
+            case DEGREE_OF_CURVATURE:
+                return Double.toString(rl.getDegreeOfCurvature());
             case GRADE:
                 return Double.toString(rl.getGrade());
             case TRANSPORT_FEE:
@@ -378,6 +386,9 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
                 break;
             case MAXLENGTH_COLUMN:
                 setMaxTrainLength(value, rl);
+                break;
+            case DEGREE_OF_CURVATURE:
+                setDegreeOfCurvature(value, rl);
                 break;
             case GRADE:
                 setGrade(value, rl);
@@ -516,6 +527,23 @@ public class RouteEditTableModel extends javax.swing.table.AbstractTableModel im
         } else {
             rl.setMaxTrainLength(length);
             _maxTrainLength = length;
+        }
+    }
+
+    private void setDegreeOfCurvature(Object value, RouteLocation rl) {
+        double degreeOfCurvature;
+        try {
+            degreeOfCurvature = Double.parseDouble(value.toString());
+        } catch (NumberFormatException e) {
+            log.error("degree of curvature must be a number");
+            return;
+        }
+        if (degreeOfCurvature <= 180 && degreeOfCurvature >= -180) {
+            rl.setDegreeOfCurvature(degreeOfCurvature);
+        } else {
+            log.error("Maximum degree of curvature is 180 degrees");
+            JOptionPane.showMessageDialog(null, Bundle.getMessage("MaxDegreeOfCurvature"), Bundle.getMessage("CanNotChangeDegreeOfCurvature"),
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 

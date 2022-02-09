@@ -23,31 +23,48 @@ import static jmri.jmrit.operations.trains.Train.NONE;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainCsvRevenue extends TrainCsvCommon {
-    // TODO EWS public constants en route to Setup variables...
-    public static final double BTU_PER_HP_SEC = 14.15;
-    public static final double BTU_PER_LB_COAL = 13000;
-    public static final double BTU_PER_LB_OIL = 18000;
-    public static final double LBS_PER_UNIT_COST_COAL = 25;
-    public static final double LBS_PER_UNIT_COST_OIL = 100;
-    // protected derived constants and conversion factors
-    protected static final double FUEL_COST_PER_HP_SEC_COAL = BTU_PER_HP_SEC / BTU_PER_LB_COAL / LBS_PER_UNIT_COST_COAL;
-    protected static final double FUEL_COST_PER_HP_SEC_OIL = BTU_PER_HP_SEC / BTU_PER_LB_OIL / LBS_PER_UNIT_COST_OIL;
+    static final int COL_FIRST = 0;
+    static final int COL_FINAL = 7;
+    static final int COL_COUNT = 8;
 
-    private static final int SWITCHING = 0;
-    private static final int TRANSPORT = 1;
-    private static final int HAZARDFEE = 2;
-    private static final int DEMURRAGE = 3;
-    private static final int CANCELLED = 4;
-    private static final int DIVERSION = 5;
-    private static final int DISCOUNTS = 6;
-    private static final int TOTAL_COL = 7;
+    static final int TOTAL_COL = 0;
+    static final int SWITCHING = 1;
+    static final int TRANSPORT = 2;
+    static final int HAZARDFEE = 3;
+    static final int DEMURRAGE = 4;
+    static final int CANCELLED = 5;
+    static final int DIVERSION = 6;
+    static final int DISCOUNTS = 7;
 
-    private static final String RP = "RP";
-    private static final Object REV = "REV";
-    private static final Object RDR = "RDR";
+    static final String OPS = "OPS";
+    static final String RP = "RP";
+    static final Object REV = "REV";
+    static final Object RDR = "RDR";
+    static final String RTT = "RTT";
+    static final String OTT = "OTT";
+    static final String MT = "\u200F\u200F\u200E \u200E"; // clever prefixed space for CSV import
+    private final Map<String, Car> allCarsByCarId = new HashMap<>();
+    private CSVPrinter printer;
+    private Map<String, BigDecimal[]> carChargesMap;
+    private Map<String, BigDecimal[]> customerChargesMap;
+    private Train train;
+    private Map<String, Set<CarRevenue>> carRevenuesByCustomer;
+    private Map<String, BigDecimal> customerDiscountRateMap;
+    private BigDecimal[] trainRevenueValues;
+    private TrainRevenues trainRevenues;
+    private String noAction;
+    public TrainCsvRevenue(Train train) throws IOException {
+        if (!Setup.isSaveTrainRevenuesEnabled() || train == null) {
+            return;
+        }
+        setup(train);
+        writeCsvRevenueFile();
+
+        TrainRevenues.deleteTrainRevenuesSerFile(train);
+    }
 
     private static String getCurrencyString(BigDecimal value) {
-        if (!isPositive(value)) {
+        if (isZero(value)) {
             return NONE;
         }
         Locale aDefault = Locale.getDefault();
@@ -60,47 +77,18 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         return getCurrencyString(BigDecimal.valueOf(Double.parseDouble(amount)));
     }
 
-    private static boolean isPositive(BigDecimal value) {
+    private static boolean isZero(BigDecimal value) {
         if (value == null) {
-            return false;
+            return true;
         } else {
-            return value.compareTo(BigDecimal.ZERO) > 0;
+            return value.compareTo(BigDecimal.ZERO) == 0;
         }
-    }
-
-    private final Map<String, Car> allCarsByCarId = new HashMap<>();
-    private Train train;
-    private Map<String, BigDecimal> customerDiscountRateMap;
-    private Map<String, Set<CarRevenue>> carRevenuesByCustomer;
-    private BigDecimal[] revenueValues;
-    private BigDecimal routeFuelCost;
-    private TrainRevenues trainRevenues;
-    private String noAction;
-    /*
-        private TrainPhysics trainPhysics;
-    */
-    public TrainCsvRevenue(Train train) throws IOException {
-        if (!Setup.isSaveTrainRevenuesEnabled() || train == null) {
-            return;
-        }
-        setup(train);
-        writeCsvRevenueFile(train);
-        TrainRevenues.deleteTrainRevenuesSerFile(train);
-    }
-
-    public BigDecimal getRouteFuelCost() {
-        if (routeFuelCost == null) {
-            setRouteFuelCost();
-        }
-        return routeFuelCost;
     }
 
     private String getActionString(CarRevenue carRevenue) {
         Boolean pickup = carRevenue.isPickup();
 
-        return pickup == null
-                ? getNoAction()
-                : Bundle.getMessage(pickup ? "Pickup" : "SetOut");
+        return pickup == null ? getNoAction() : Bundle.getMessage(pickup ? "Pickup" : "SetOut");
     }
 
     private void setAllCarsByCarId() {
@@ -115,16 +103,12 @@ public class TrainCsvRevenue extends TrainCsvCommon {
             carRevenue.setLoadName(car.getLoadName());
         }
 
-        return String.format("%-" + getNoAction().length() + "s : (%-5s) %-5s %-7s - %s",
-                getActionString(carRevenue),
-                carRevenue.getLoadName(),
-                car.getRoadName(),
-                car.getNumber(),
-                car.getTypeName()
-        );
+        return String.format("%-" + getNoAction().length() + "s : (%-5s) %-5s %-7s - %s", getActionString(carRevenue), carRevenue.getLoadName(), car.getRoadName(), car.getNumber(), car.getTypeName());
     }
 
-    private void setCarRevenueSetByCustomer() { carRevenuesByCustomer = trainRevenues.getCarRevenueSetByCustomer(); }
+    private void setCarRevenueSetByCustomer() {
+        carRevenuesByCustomer = trainRevenues.getCarRevenueSetByCustomer();
+    }
 
     private void setCustomerDiscountRateMap() {
         int maxCapacity = 1;
@@ -178,8 +162,12 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         return noAction;
     }
 
+    private String getIntegerString(BigDecimal value) {
+        return isZero(value) ? NONE : NumberFormat.getIntegerInstance().format(value);
+    }
+
     private String getPercentageString(BigDecimal value) {
-        return isPositive(value) ? getPercentFormat().format(value) : NONE;
+        return isZero(value) ? NONE : getPercentFormat().format(value);
     }
 
     private NumberFormat getPercentFormat() {
@@ -190,30 +178,16 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         return percentFormat;
     }
 
-    private void setRevenueValues() {
-        BigDecimal[] bigDecimals = new BigDecimal[TOTAL_COL + 1];
-        for (int i = SWITCHING; i <= TOTAL_COL; i++) {
-            bigDecimals[i] = BigDecimal.ZERO;
-        }
-        revenueValues = bigDecimals;
+    private void setTrain(Train train) {
+        this.train = train;
     }
 
-    private void setRouteFuelCost() {
-        double fuelCosts = 0;
-//        for (double fuelCost : trainRevenues.getFuelCosts().values()) {
-//            fuelCosts += fuelCost;
-//        }
-        this.routeFuelCost = BigDecimal.valueOf(fuelCosts);
+    private void setTrainRevenues(Train train) {
+        trainRevenues = train.getTrainRevenues();
     }
-
-    private void setTrain(Train train) { this.train = train; }
-/*
-    private void setTrainPhysics(Train train) { trainPhysics = new TrainPhysics(train); }
-*/
-    private void setTrainRevenues(Train train) { trainRevenues = train.getTrainRevenues(); }
 
     private void addBigDecimalValues(BigDecimal[] customerValues, BigDecimal[] carValues) {
-        for (int i = SWITCHING; i <= TOTAL_COL; i++) {
+        for (int i = COL_FIRST; i <= COL_FINAL; i++) {
             customerValues[i] = customerValues[i].add(carValues[i]);
         }
     }
@@ -229,19 +203,16 @@ public class TrainCsvRevenue extends TrainCsvCommon {
 
     private BigDecimal calcBigDecimalTotal(BigDecimal[] bigDecimals) {
         BigDecimal total = BigDecimal.ZERO;
-        for (int i = SWITCHING; i < TOTAL_COL; i++) {
-            if (i == DISCOUNTS) {
-                total = total.subtract(bigDecimals[i]);
-            } else {
-                total = total.add(bigDecimals[i]);
-            }
+        for (int i = SWITCHING; i < DISCOUNTS; i++) {
+            total = total.add(bigDecimals[i]);
         }
+        total = total.subtract(bigDecimals[DISCOUNTS]);
 
         return total;
     }
 
     private BigDecimal[] loadCarCharges(CarRevenue carRevenue, BigDecimal discountRate) {
-        BigDecimal[] carCharges = new BigDecimal[TOTAL_COL + 1];
+        BigDecimal[] carCharges = new BigDecimal[COL_COUNT];
 
         carCharges[SWITCHING] = carRevenue.getSwitchingCharges();
         carCharges[TRANSPORT] = carRevenue.getTransportCharges();
@@ -255,65 +226,68 @@ public class TrainCsvRevenue extends TrainCsvCommon {
         return carCharges;
     }
 
-    private void printBigDecimalValues(CSVPrinter fileOut, BigDecimal[] bigDecimals) throws IOException {
-        for (int i = SWITCHING; i <= TOTAL_COL; i++) {
-            fileOut.print(getCurrencyString(bigDecimals[i]));
+    private void printBigDecimalValues(CSVPrinter printer, BigDecimal[] bigDecimals) throws IOException {
+        for (int i = COL_FIRST; i <= COL_FINAL; i++) {
+            printer.print(getCurrencyString(bigDecimals[i]));
         }
     }
 
-    private void printHeaderBlock(CSVPrinter fileOut) throws IOException {
-        fileOut.printRecord(Bundle.getMessage("csvOperator"), Bundle.getMessage("csvDescription"), Bundle.getMessage("csvParameters")); // NOI18N
-        fileOut.printRecord(REV, Setup.getMessage("RevenueReport"), Locale.getDefault().toString());
+    private void printHeaderBlock() throws IOException {
+        printer.printRecord(Bundle.getMessage("csvOperator"), Bundle.getMessage("csvDescription"), Bundle.getMessage("csvParameters")); // NOI18N
+        printer.printRecord(REV, Setup.getMessage("CostRevenueReport"), "Locale: " + Locale.getDefault().toString());
 
-        printRailroadName(fileOut, train.getRailroadName().isEmpty() ? Setup.getRailroadName() : train.getRailroadName());
-        printTrainName(fileOut, train.getName());
-        printTrainDescription(fileOut, train.getDescription());
-        printValidity(fileOut, getDate(true));
+        printRailroadName(printer, train.getRailroadName().isEmpty() ? Setup.getRailroadName() : train.getRailroadName());
+        printTrainName(printer, train.getName());
+        printTrainRoute(printer, train.getRoute().getName());
+        printTrainDescription(printer, train.getDescription());
+        printValidity(printer, getDate(true));
         // train comment can have multiple lines
         if (!train.getComment().equals(NONE)) {
             for (String comment : train.getComment().split(NEW_LINE)) {
-                fileOut.printRecord("TC", Bundle.getMessage("csvTrainComment"), comment); // NOI18N
+                printer.printRecord("TC", Bundle.getMessage("csvTrainComment"), comment); // NOI18N
             }
         }
         if (Setup.isPrintRouteCommentsEnabled()) {
-            fileOut.printRecord("RC", Bundle.getMessage("csvRouteComment"), train.getRoute().getComment()); // NOI18N
+            printer.printRecord("RC", Bundle.getMessage("csvRouteComment"), train.getRoute().getComment()); // NOI18N
         }
     }
 
-    private void printParameterBlock(CSVPrinter fileOut) throws IOException {
-        fileOut.printRecord(NONE);
-        fileOut.printRecord(REV, Setup.getMessage("ParameterDescription"), Setup.getMessage("ParameterValue"));
-        fileOut.printRecord(NONE, Setup.getMessage("DiscountTitle"));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("MaximumDiscount"), Setup.getMaxDiscount() + "%");
-        fileOut.printRecord(NONE, Setup.getMessage("SwitchingTitle"));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingEmpty"), getCurrencyString(Setup.getSwitchEmpty()));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingLoads"), getCurrencyString(Setup.getSwitchLoads()));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingAggrs"), getCurrencyString(Setup.getSwitchAggrs()));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingGrain"), getCurrencyString(Setup.getSwitchGrain()));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingMetal"), getCurrencyString(Setup.getSwitchMetal()));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingWoody"), getCurrencyString(Setup.getSwitchWoody()));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("SwitchingTanks"), getCurrencyString(Setup.getSwitchTanks()));
-        fileOut.printRecord(NONE, Setup.getMessage("MulctTitle"));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("CancelledMulct"), getCurrencyString(Setup.getCancelMulct()));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("DiversionMulct"), getCurrencyString(Setup.getDivertMulct()));
-        fileOut.printRecord(NONE, Setup.getMessage("DemurrageTitle"));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("DemurrageRR"), getCurrencyString(Setup.getDemurrageRR()));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("DemurrageXX"), getCurrencyString(Setup.getDemurrageXX()));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("DemurrageCredits"), Setup.getDemurCredits());
-        fileOut.printRecord(NONE, Setup.getMessage("HandlingTitle"));
-        fileOut.printRecord(RP, " - " + Setup.getMessage("AddedHazardFee"), getCurrencyString(Setup.getHazardFee()));
+    private void printCostParameterBlock() throws IOException {
+        printer.printRecord(NONE);
+        printer.printRecord(REV, Setup.getMessage("CostParamTitle"), Setup.getMessage("CustomValue"));
     }
 
-    private void printRevenueDetailByCarValues(CSVPrinter fileOut) throws IOException {
-        printRevenueDetailSubHeader(fileOut, "ByCar", "ForCustomer");
+    private void printRevenueParameterBlock() throws IOException {
+        // TODO EWS expand to include cost parameters TBD and separate rev / cost print methods
+        printer.printRecord(NONE);
+        printer.printRecord(REV, Setup.getMessage("RevenueParamTitle"), Setup.getMessage("CustomValue"));
+        printer.printRecord(NONE, Setup.getMessage("SwitchingTitle"));
+        printer.printRecord(RP, " - " + Setup.getMessage("SwitchingEmpty"), getCurrencyString(Setup.getSwitchEmpty()));
+        printer.printRecord(RP, " - " + Setup.getMessage("SwitchingLoads"), getCurrencyString(Setup.getSwitchLoads()));
+        printer.printRecord(RP, " - " + Setup.getMessage("SwitchingAggrs"), getCurrencyString(Setup.getSwitchAggrs()));
+        printer.printRecord(RP, " - " + Setup.getMessage("SwitchingGrain"), getCurrencyString(Setup.getSwitchGrain()));
+        printer.printRecord(RP, " - " + Setup.getMessage("SwitchingMetal"), getCurrencyString(Setup.getSwitchMetal()));
+        printer.printRecord(RP, " - " + Setup.getMessage("SwitchingWoody"), getCurrencyString(Setup.getSwitchWoody()));
+        printer.printRecord(RP, " - " + Setup.getMessage("SwitchingTanks"), getCurrencyString(Setup.getSwitchTanks()));
+        printer.printRecord(NONE, Setup.getMessage("MulctTitle"));
+        printer.printRecord(RP, " - " + Setup.getMessage("CancelledMulct"), getCurrencyString(Setup.getCancelMulct()));
+        printer.printRecord(RP, " - " + Setup.getMessage("DiversionMulct"), getCurrencyString(Setup.getDivertMulct()));
+        printer.printRecord(RP, Setup.getMessage("HazardTariff"), getCurrencyString(Setup.getHazardFee()));
+        printer.printRecord(NONE, Setup.getMessage("DemurrageTitle"));
+        printer.printRecord(RP, " - " + Setup.getMessage("DemurrageRR"), getCurrencyString(Setup.getDemurrageRR()));
+        printer.printRecord(RP, " - " + Setup.getMessage("DemurrageXX"), getCurrencyString(Setup.getDemurrageXX()));
+        printer.printRecord(RP, Setup.getMessage("DemurrageCredits"), Setup.getDemurCredits());
+        printer.printRecord(RP, Setup.getMessage("MaximumDiscount"), Setup.getMaxDiscount() + "%");
+    }
+
+    private void printRevenueDetailByCarValues() throws IOException {
+        printRevenueDetailHeader("Car", "Customer");
+/*
+        printRevenueDetailSubHeader(printer, "ByCar", "ForCustomer");
+*/
         for (Map.Entry<String, Set<CarRevenue>> e : trainRevenues.getCarRevenueSetByCustomer().entrySet()) {
 
             String customer = e.getKey();
-            BigDecimal discountRate = customerDiscountRateMap.get(customer);
-            if (discountRate == null) {
-                discountRate = BigDecimal.ZERO;
-            }
-
             Map<String, CarRevenue> printMap = new TreeMap<>();
             for (CarRevenue carRevenue : e.getValue()) {
                 printMap.put(getCarDescription(carRevenue), carRevenue);
@@ -322,114 +296,168 @@ public class TrainCsvRevenue extends TrainCsvCommon {
             for (Map.Entry<String, CarRevenue> kv : printMap.entrySet()) {
                 String description = kv.getKey();
                 CarRevenue carRevenue = kv.getValue();
-                fileOut.print(RDR);
-                fileOut.print(description);
-                fileOut.print(customer);
-                printBigDecimalValues(fileOut, loadCarCharges(carRevenue, discountRate));
-                fileOut.println();
+                printer.print(RDR);
+                printer.print(description);
+                printer.print(customer);
+                printBigDecimalValues(printer, carChargesMap.get(carRevenue.getUniqueId()));
+                printer.println();
             }
         }
-        fileOut.println();
     }
 
-    private void printRevenueDetailSubHeader(CSVPrinter fileOut, String col2, String col3) throws IOException {
-        fileOut.print("REV");
-        fileOut.print(Setup.getMessage(col2));
-        fileOut.print(Setup.getMessage(col3));
-        fileOut.println();
-    }
-
-    private void printRevenueDetailByCustomerValues(CSVPrinter fileOut) throws IOException {
-        printRevenueDetailSubHeader(fileOut, "ByCustomer", "DiscountRate");
+    private void printRevenueDetailByCustomerValues() throws IOException {
+        printer.printRecord(NONE);
+        printRevenueDetailHeader("Customer", "Discount");
         for (Map.Entry<String, Set<CarRevenue>> e : carRevenuesByCustomer.entrySet()) {
             String customerName = e.getKey();
             BigDecimal customerDiscountRate = customerDiscountRateMap.get(customerName);
             if (customerDiscountRate == null) {
                 customerDiscountRate = BigDecimal.ZERO;
             }
-            BigDecimal[] bigDecimals = new BigDecimal[TOTAL_COL + 1];
-            for (int i = SWITCHING; i <= TOTAL_COL; i++) {
-                bigDecimals[i] = BigDecimal.ZERO;
-            }
-            BigDecimal[] customerCharges = bigDecimals;
 
-            for (CarRevenue carRevenue : e.getValue()) {
-                addBigDecimalValues(customerCharges, loadCarCharges(carRevenue, customerDiscountRate));
-            }
-
-            fileOut.print(RDR);
-            fileOut.print(customerName);
-            fileOut.print(getPercentageString(customerDiscountRate));
-            printBigDecimalValues(fileOut, customerCharges);
-            fileOut.println();
-
-            addBigDecimalValues(revenueValues, customerCharges);
+            printer.print(RDR);
+            printer.print(customerName);
+            printer.print(getPercentageString(customerDiscountRate));
+            printBigDecimalValues(printer, customerChargesMap.get(customerName));
+            printer.println();
         }
-        fileOut.println();
     }
 
-    private void printRevenueDetailForTrainValues(CSVPrinter fileOut) throws IOException {
-        printRevenueDetailSubHeader(fileOut, "ByTrain", "RouteRate");
-
-        fileOut.print(RDR);
-        fileOut.print(train.getDescription());
-        fileOut.print(getCurrencyString(trainRevenues.getMaxRouteTransportFee()));
-        printBigDecimalValues(fileOut, revenueValues);
-        fileOut.println();
+    private void printRevenueDetailForTrainValues() throws IOException {
+        printRevenueDetailHeader("ByTrain", "RouteRate");
+        printer.print(RTT);
+        printer.print(train.getDescription());
+        printer.print(getCurrencyString(trainRevenues.getMaxRouteTransportFee()));
+        printBigDecimalValues(printer, trainRevenueValues);
     }
 
-    private void printRevenueDetailHeader(CSVPrinter fileOut) throws IOException {
-        fileOut.println();
-        fileOut.print(NONE);
-        fileOut.print(NONE);
-        fileOut.print(NONE);
-        fileOut.print(Setup.getMessage("Switching"));
-        fileOut.print(Setup.getMessage("Transport"));
-        fileOut.print(Setup.getMessage("Hazard"));
-        fileOut.print(Setup.getMessage("Demurrage"));
-        fileOut.print(Setup.getMessage("Cancelled"));
-        fileOut.print(Setup.getMessage("Diverted"));
-        fileOut.print(Setup.getMessage("Customer"));
-        fileOut.print(Setup.getMessage("Total"));
-        fileOut.println();
+    private void printCostDetailBlock() throws IOException {
+        double revenueTotal = trainRevenueValues[TOTAL_COL].doubleValue();
+        double routeTotalCost = trainRevenues.getRouteTotalCost().doubleValue();
+        double netProfit = revenueTotal - routeTotalCost;
+        double opsRatio = routeTotalCost / revenueTotal;
 
-        fileOut.print(NONE);
-        fileOut.print(NONE);
-        fileOut.print(NONE);
-        fileOut.print(Setup.getMessage("Tariff"));
-        fileOut.print(Setup.getMessage("Tariff"));
-        fileOut.print(Setup.getMessage("Tariff"));
-        fileOut.print(Setup.getMessage("Charge"));
-        fileOut.print(Setup.getMessage("Mulct"));
-        fileOut.print(Setup.getMessage("Mulct"));
-        fileOut.print(Setup.getMessage("Discount"));
-        fileOut.print(Setup.getMessage("Revenue"));
-        fileOut.println();
+        String message = Setup.getMessage("OpsRatio") + ": " + getPercentageString(BigDecimal.valueOf(opsRatio));
+        int blanks = Setup.getMessage("OpsReport").length() - 1 - message.length();
+        String pad = String.format("%" + blanks + "s", " ");
+        String opsRatioSubtitle = MT + pad + message;
+
+        printer.print(OTT);
+        printer.print(opsRatioSubtitle);
+        printer.print(getCurrencyString(BigDecimal.valueOf(revenueTotal)));
+        printer.print(getCurrencyString(trainRevenues.getRouteTotalCost()));
+        printer.print(getCurrencyString(trainRevenues.getRouteOverheadCost()));
+        printer.print(getCurrencyString(trainRevenues.getRouteLaborCost()));
+        printer.print(getCurrencyString(trainRevenues.getRouteMoeCost()));
+        printer.print(getCurrencyString(trainRevenues.getRouteMowCost()));
+        printer.print(getCurrencyString(BigDecimal.valueOf(netProfit)));
+        printer.print(getCurrencyString(trainRevenues.getRouteFuelCost()));
+        printer.print(getIntegerString(trainRevenues.getRouteTonMiles()));
+        printer.println();
     }
 
-    private void setup(Train train) {
+    private void printCostDetailHeader() throws IOException {
+        printer.printRecord(NONE);
+        printer.print(OPS);
+        printer.print(Setup.getMessage("OpsReport"));
+        printer.print(Setup.getMessage("TotalRevenue"));
+        printer.print(Setup.getMessage("TotalCost"));
+        printer.print(Setup.getMessage("NetProfit"));
+        printer.print(Setup.getMessage("Labor"));
+        printer.print(Setup.getMessage("MOE"));
+        printer.print(Setup.getMessage("MOW"));
+        printer.print(Setup.getMessage("Overhead"));
+        printer.print(Setup.getMessage("Fuel"));
+        printer.print(Setup.getMessage("TonMiles"));
+        printer.println();
+    }
+
+    private void printRevenueDetailHeader(String topic, String subTopic) throws IOException {
+        printer.printRecord(NONE);
+        printer.print(REV);
+        printer.print(Setup.getMessage("RevenueDetail") + ": " + Setup.getMessage(topic));
+        printer.print(Setup.getMessage(subTopic));
+        printer.print(Setup.getMessage("Total"));
+        printer.print(Setup.getMessage("Switching"));
+        printer.print(Setup.getMessage("Transport"));
+        printer.print(Setup.getMessage("Hazard"));
+        printer.print(Setup.getMessage("Demurrage"));
+        printer.print(Setup.getMessage("Cancellation"));
+        printer.print(Setup.getMessage("Diversion"));
+        printer.print(Setup.getMessage("Discount"));
+        printer.println();
+    }
+
+    private void setup(Train train) throws IOException {
+        File csvFile = InstanceManager.getDefault(TrainManagerXml.class).createTrainCsvRevenueFile(train);
+        BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(csvFile), StandardCharsets.UTF_8));
+        CSVFormat format = CSVFormat.DEFAULT.withIgnoreSurroundingSpaces(false);
+        printer = new CSVPrinter(bufferedWriter, format);
+
         setTrain(train);
         setTrainRevenues(train);
         setCarRevenueSetByCustomer();
         setCustomerDiscountRateMap();
         setAllCarsByCarId();
-        setRevenueValues();
         setDefaultLocale();
-//        setTrainPhysics(train);
+
+        loadCarCharges();
+        loadCustomerCharges();
+        loadTrainCharges();
     }
 
-    private void writeCsvRevenueFile(Train train) throws IOException {
-        File csvFile = InstanceManager.getDefault(TrainManagerXml.class).createTrainCsvRevenueFile(train);
-        CSVPrinter fileOut = new CSVPrinter(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(csvFile), StandardCharsets.UTF_8)), CSVFormat.DEFAULT);
-        printHeaderBlock(fileOut);
-        printParameterBlock(fileOut);
+    private void writeCsvRevenueFile() throws IOException {
+        printHeaderBlock();
+        printCostDetailHeader();
+        printCostDetailBlock();
+        printRevenueDetailForTrainValues();
+        printRevenueDetailByCustomerValues();
+        printRevenueDetailByCarValues();
+        printCostParameterBlock();
+        printRevenueParameterBlock();
+        printer.flush();
+    }
 
-        printRevenueDetailHeader(fileOut);
-        printRevenueDetailByCarValues(fileOut);
-        printRevenueDetailByCustomerValues(fileOut);
-        printRevenueDetailForTrainValues(fileOut);
+    private void loadCarCharges() {
+        carChargesMap = new HashMap<>();
+        for (Map.Entry<String, Set<CarRevenue>> e : trainRevenues.getCarRevenueSetByCustomer().entrySet()) {
+            String customer = e.getKey();
+            BigDecimal discountRate = customerDiscountRateMap.get(customer);
+            if (discountRate == null) {
+                discountRate = BigDecimal.ZERO;
+            }
+            for (CarRevenue carRevenue : e.getValue()) {
+                carChargesMap.put(carRevenue.getUniqueId(), loadCarCharges(carRevenue, discountRate));
+            }
+        }
+    }
 
-        fileOut.flush();
+    private void loadCustomerCharges() {
+        customerChargesMap = new HashMap<>();
+        for (Map.Entry<String, Set<CarRevenue>> e : trainRevenues.getCarRevenueSetByCustomer().entrySet()) {
+            String customer = e.getKey();
+
+            BigDecimal[] customerCharges = new BigDecimal[COL_COUNT];
+            for (int i = COL_FIRST; i <= COL_FINAL; i++) {
+                customerCharges[i] = BigDecimal.ZERO;
+            }
+
+            for (CarRevenue carRevenue : e.getValue()) {
+                addBigDecimalValues(customerCharges, carChargesMap.get(carRevenue.getUniqueId()));
+            }
+            customerChargesMap.put(customer, customerCharges);
+        }
+    }
+
+    private void loadTrainCharges() {
+        trainRevenueValues = new BigDecimal[COL_COUNT];
+        for (int i = COL_FIRST; i <= COL_FINAL; i++) {
+            trainRevenueValues[i] = BigDecimal.ZERO;
+        }
+
+        for (BigDecimal[] values : customerChargesMap.values()) {
+            addBigDecimalValues(trainRevenueValues, values);
+        }
     }
 
 }

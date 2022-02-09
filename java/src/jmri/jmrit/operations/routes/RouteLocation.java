@@ -40,6 +40,7 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     protected boolean _pickups = true; // when true pick-ups allowed at this location
     protected int _sequenceNum = 0; // used to determine location order in a route
     protected double _grade = 0; // maximum grade between locations
+    protected double _degreeOfCurvature = 0; // maximum _degree of curvature between locations
     protected int _speedLimit = 40; // maximum train speed between locations
     protected int _distance = 10; // transport distance between locations
     protected int _transportFee = 20; // transport fee per car between locations
@@ -404,6 +405,19 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     }
 
     @SuppressFBWarnings(value = "FE_FLOATING_POINT_EQUALITY", justification = "firing property change doesn't matter")
+    public void setDegreeOfCurvature(double degreeOfCurvature) {
+        double old = _degreeOfCurvature;
+        _degreeOfCurvature = degreeOfCurvature;
+        if (old != _degreeOfCurvature) {
+            setDirtyAndFirePropertyChange("degreeOfCurvature", Double.toString(old), Double.toString(degreeOfCurvature)); // NOI18N
+        }
+    }
+
+    public double getDegreeOfCurvature() {
+        return _degreeOfCurvature;
+    }
+
+    @SuppressFBWarnings(value = "FE_FLOATING_POINT_EQUALITY", justification = "firing property change doesn't matter")
     public void setGrade(double grade) {
         double old = _grade;
         _grade = grade;
@@ -466,15 +480,6 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
         return _trainIconY;
     }
     
- 
-//    public void setTrainIconRangeX(int x) {
-//        int old = _trainIconRangeX;
-//        _trainIconRangeX = x;
-//        if (old != x) {
-//            setDirtyAndFirePropertyChange("trainIconRangeX", Integer.toString(old), Integer.toString(x)); // NOI18N
-//        }
-//    }
-
     /**
      * Gets the X range for detecting the manual movement of a train icon.
      * @return the range for detection

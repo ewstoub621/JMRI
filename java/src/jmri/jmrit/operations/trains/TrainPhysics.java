@@ -10,13 +10,8 @@ import java.util.Calendar;
 import java.util.List;
 
 /**
- * These calculators are partly based on http://evilgeniustech.com/idiotsGuideToRailroadPhysics/TheBasics/
- * <p>That site is a partial reconstitution of the work of Al Krug, a.k.a. the Evil Genius, on train motion
- * physics. A second source is https://www.railelectrica.com/traction-mechanics/train-grade-curve-and-acceleration-resistance-2//p>
- *
- * <p>Careful vetting of these calculators and particularly the proper use of units allow easy shifting
- * of values between the US (aka "English Engineering System") and SI (aka "International System of Units") quantities.
- * The TrainPhysicsTest class illustrates the use of the calculations and unit conversions</p>
+ * These calculators are partly based Train Forces Calculator by Al Krug
+ * <br>(https://web.archive.org/web/20090408120433/http://www.alkrug.vcn.com/rrfacts/RRForcesCalc.html)
  *
  * @author Everett Stoub Copyright (C) 2021
  */
@@ -52,8 +47,8 @@ public class TrainPhysics implements Serializable {
     static final double MILES_PER_KM = KM_PER_METER / METERS_PER_MILE; // ~0.621371
     static final double MPH_PER_MPS = SEC_PER_HOUR / METERS_PER_MILE;// ~2.236936
     static final double MPH_PER_FPS = SEC_PER_HOUR / FEET_PER_MILE; // ~0.681818
-    static final double STATIC_ADHESION = 1.3 / LBS_PER_TON; // rolling steel wheel on steel rail
     static final double STRETCH_SPEED_LIMIT_FPS = STRETCH_SPEED_LIMIT_MPH / MPH_PER_FPS;
+    static final double STATIC_ADHESION = 1.3 / LBS_PER_TON; // rolling steel wheel on steel rail
     static final double NEWTONS_PER_LB = KG_PER_LB * G_SI;// ~4.4482
     static final double NEWTONS_PER_TON = NEWTONS_PER_LB * LBS_PER_TON; // ~8896.44
     // protected derived constants and conversion factors
@@ -66,14 +61,13 @@ public class TrainPhysics implements Serializable {
      * propelling forces subtracted by the total of opposed forces. Under deceleration, this would be the total of
      * braking forces plus the total of opposed forces.
      * <p>
-     * The units must agree: if SI, both totalWeight and force should be in Newtons, else if US, both should be in tons.
-     * A force:totalWeight ratio expresses acceleration in "g's", the g-ratio pr "g's", which can be converted to
-     * MPS/second via G_SI or FPS/second via G_US.
+     * The units must agree: both totalWeight and force should be in tons. A force:totalWeight ratio expresses
+     * acceleration in "g's", the g-ratio pr "g's", which can be converted to FPS/second via G_US.
      * </p>
      *
-     * @param netForce    in Newtons (SI) or tons
-     * @param totalWeight in Newtons (SI) or tons
-     * @return the calculated acceleration in MPS/sec (SI) or MPH per sec
+     * @param netForce    in tons
+     * @param totalWeight in tons
+     * @return the calculated acceleration in MPH per sec
      */
     static double getAcceleration(double netForce, double totalWeight) {
         double gRatio = netForce / totalWeight; // acceleration per gravitational acceleration
@@ -90,14 +84,15 @@ public class TrainPhysics implements Serializable {
     }
 
     /**
-     * Curve resistance depends on the degree of curve and the total train weight, assuming the length of the curve
+     * Curve resistance depends on the degrees of a curve and the total train weight, assuming the length of the curve
      * exceeds the length of the train. The degree of curvature is based on 100 units of arc (chord) length, so the
      * degree of the curve = 180° * (100' / r) / π, where r is the radius of the curve in feet, i.e. about 5729.578 / r.
      * The value represents the angle of the change in direction per 100' of travel. The measurement is actually 100' of
      * chord, also known as a "station", not the length of the curved rail, easily measured as a straight line by tape
-     * measure.
+     * measure. For instance, in HO scale, an 18" track radius corresponds to 45° of curvature, while a 7" track radius
+     * hits the 180° limit value of curvature.
      *
-     * @param degreeOfCurvature in degrees
+     * @param degreeOfCurvature direction change in degrees for a 100' (scale) chord on curve
      * @param weight            in tons
      * @return curve resistance in tons
      */
@@ -126,15 +121,15 @@ public class TrainPhysics implements Serializable {
      * the sake of efficient operation, we assume the use of full engine power, without spinning driver wheels, is used
      * for acceleration.</p>
      *
-     * @param fullPower    full power to accelerate motion in watts (SI) or HP
-     * @param speed        speed in MPS (SI) or MPH
+     * @param fullPower    full power to accelerate motion in HP
+     * @param speed        speed in MPH
      * @param totalWeight  total weight being moved tons or newtons
      * @param driverWeight driver wheels weight load available for starting force in tons or newtons
      * @param gradePercent the grade in percentage units
-     * @return the calculated net force in Newtons (SI) or tons
+     * @return the calculated net force in tons
      */
     static double getNetForce(double fullPower, double speed, double totalWeight, double driverWeight, double gradePercent) {
-        return Math.min(tractiveForceLimit(driverWeight), getTractiveForce(fullPower, speed)) - getRollingDrag(totalWeight, speed, 100, 25) - getGradeDrag(totalWeight, gradePercent);
+        return Math.min(tractiveForceLimit(driverWeight), getTractiveForce(fullPower, speed)) - getRollingDrag(totalWeight, speed, 100, 25, 110) - getGradeDrag(totalWeight, gradePercent);
     }
 
     static TrainMotion getNewTrainMotion(TrainMotion priorTrainMotion, double newSpeed, double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double distanceLimit) {
@@ -152,7 +147,7 @@ public class TrainPhysics implements Serializable {
         boolean accelerate = d_v_signum > 0;
 
         double availTractiveForce = availTractiveForce(driverWeight, fullPower, totalWeight, v_0, accelerate);
-        double rollingDrag = getRollingDrag(totalWeight, v_0, 100, 25);
+        double rollingDrag = getRollingDrag(totalWeight, v_0, 100, 25, 110);
         double gradeDrag = getGradeDrag(totalWeight, gradePercent);
         double netForce = d_v_signum * availTractiveForce - rollingDrag - gradeDrag; // +/- tons
         double a_x = getAcceleration(netForce, totalWeight); // +/- MPH/s
@@ -172,34 +167,37 @@ public class TrainPhysics implements Serializable {
         double appliedPower = appliedPower(fullPower, newSpeed, driverWeight);
         if (accelerate) {
             double throttle = 100 * appliedPower / fullPower;
-            return new TrainMotion(dt, t_1, x_1, newSpeed, a_x, netForce, appliedPower, throttle, 0, accelerate ? "accelerating" : "decelerating");
+            return new TrainMotion(dt, t_1, x_1, newSpeed, a_x, totalWeight, netForce, appliedPower, throttle, 0, "accelerating");
         } else {
             double brake = Math.abs(100 * availTractiveForce / brakingForceDesignLimit);
-            return new TrainMotion(dt, t_1, x_1, newSpeed, a_x, netForce, 0, 0, brake, "decelerating");
+            return new TrainMotion(dt, t_1, x_1, newSpeed, a_x, totalWeight, netForce, 0, 0, brake, "decelerating");
         }
     }
 
     /**
-     * The retarding force due to rolling resistance for weight borne by train wheels on track, using a coefficient of
-     * (adhesive) friction for steel wheels on steel rails, which is independent of speed, plus (sliding) friction for
-     * steel wheel flanges against steel rail faces, which is speed dependent and purely empirical. There is no account
-     * for air resistance, as that is negligible for freight trains due to their relatively low speeds.
+     * The retarding force due to rolling drag (resistance) for weight borne by train wheels on track. There are 4
+     * separate contributors to rolling drag:
+     * <dl>
+     *     <dt>- adhesion drag</dt><dd>adhesion due to the high-pressure, small contact area between a steel wheel and rail</dd>
+     *     <dt>- air drag</dt><dd>speed-squared-dependent wind resistance by each car, for an average car face area</dd>
+     *     <dt>- bearing drag</dt><dd>retarding force by each axle due to average axle loading</dd>
+     *     <dt>- flange drag</dt><dd>speed-dependent force due to wheel flanges sliding against the inside rail head surfaces</dd>
+     * </dl>
      *
-     * @param weight the weight in tons
-     * @param speed  speed in MPH
-     * @param axleCount
-     * @param carCount
+     * @param weight      the train weight in tons
+     * @param speed       train speed in MPH
+     * @param axleCount   number of axles supporting the weight of the train
+     * @param carCount    number of cars supporting the weight of the train
+     * @param carFaceArea average area of the leading face of cars, in sq. ft.
      * @return the calculated rolling resistance force (always opposed to motion) in tons
      */
-    static double getRollingDrag(double weight, double speed, double axleCount, double carCount) {
+    static double getRollingDrag(double weight, double speed, double axleCount, double carCount, double carFaceArea) {
         double adhesionDrag = getAdhesionDrag(weight);
-        double airDrag = getAirDrag(carCount, speed, 110);
+        double airDrag = getAirDrag(carCount, speed, carFaceArea);
         double bearingDrag = getBearingDrag(axleCount);
         double flangeDrag = getFlangeDrag(weight, speed);
 
-        double rollingDrag = adhesionDrag + airDrag + bearingDrag + flangeDrag;
-
-        return rollingDrag;
+        return adhesionDrag + airDrag + bearingDrag + flangeDrag;
     }
 
     static double getFlangeDrag(double weight, double speed) {
@@ -234,32 +232,30 @@ public class TrainPhysics implements Serializable {
      * @return the calculated starting resistance force for the total weight on wheel bearings
      */
     static double getStartingDrag(double weight, boolean isRoller, boolean isWarm) {
-        double bearingFactor = (isRoller ? (isWarm ? 5 : 15) : (isWarm ? 25 : 35)) / LBS_PER_TON;
-
-        return bearingFactor * weight;
+        return weight * ((isRoller ? (isWarm ? 5 : 15) : (isWarm ? 25 : 35)) / LBS_PER_TON);
     }
 
     /**
      * TrainMotion starting at rest with train initially bunched, to exploit Slack for possible low driver weight and/or
      * high bearing resistance, to overcome starting resistance, by stretching the train car by car.
      *
-     * @param driverWeight driver wheels weight load available for applied force in Newtons (SI) or tons
+     * @param driverWeight driver wheels weight load available for applied force in tons
      * @param engineWeight engine weight including possible tender
      * @param carWeights   ordered list of all car weights in this train
-     * @param fullPower    full power to accelerate motion in watts (SI) or HP
+     * @param fullPower    full power to accelerate motion in HP
      * @param gradePercent the grade in percentage units
-     * @return TrainMotion convering the entire time interval to stretch this train's coupler assemblies
+     * @return TrainMotion covering the entire time interval to stretch this train's coupler assemblies
      */
     static TrainMotion getStretchMotion(double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent) {
         double totalWeight = engineWeight + carWeights.stream().mapToInt(w -> w).sum();
         if (getNetForce(fullPower, STRETCH_SPEED_LIMIT_MPH, totalWeight, driverWeight, gradePercent) < 0) {
-            return new TrainMotion("no stretch");
+            return new TrainMotion("no stretch motion possible");
         }
 
         double f = netForceAtRest(engineWeight, driverWeight, gradePercent);
         double stretchedWeight = engineWeight; // initial weight to pull
         // first accelerate engine only from rest to Slack feet down the track, in feet and second units
-        double v2;
+        double v2; // fps^2
         double l2 = STRETCH_SPEED_LIMIT_FPS * STRETCH_SPEED_LIMIT_FPS; // fps^2 speed limit squared
         double aLimit = l2 / (2 * SLACK_PER_CAR_FEET); // fps/s
         double aAvail = accelerationFpsPerSecond(f, stretchedWeight); // fps/s
@@ -273,7 +269,8 @@ public class TrainPhysics implements Serializable {
         for (double carWeight : carWeights) {
             double newStretchedWeight = stretchedWeight + carWeight;
             v *= stretchedWeight / newStretchedWeight; // fully inelastic stretch conserves momentum
-            f = getNetForce(fullPower, v * MPH_PER_FPS, newStretchedWeight, driverWeight, gradePercent);
+            double mph = v * MPH_PER_FPS;
+            f = getNetForce(fullPower, mph, newStretchedWeight, driverWeight, gradePercent); // tons
             v2 = v * v; // fps^2
             aLimit = (l2 - v2) / (2 * SLACK_PER_CAR_FEET); // fps/s
             aAvail = accelerationFpsPerSecond(f, stretchedWeight); // fps/s
@@ -309,15 +306,18 @@ public class TrainPhysics implements Serializable {
             appliedHp = 0;
             brake = 100 * appliedForce / brakingForceDesignLimit(totalWeight);
         }
-        return new TrainMotion(t, t, x / FEET_PER_MILE, v * MPH_PER_FPS, a * MPH_PER_FPS, appliedForce, appliedHp, throttle, brake, "stretch cars");
+        double miles = x / FEET_PER_MILE;
+        double mph = v * MPH_PER_FPS;
+        double mphPerSecond = a * MPH_PER_FPS;
+        return new TrainMotion(t, t, miles, mph, mphPerSecond, totalWeight, appliedForce, appliedHp, throttle, brake, "stretch cars");
     }
 
     /**
      * Tractive Effort (force) to change the train speed, given its applied engine power
      *
-     * @param appliedPower if SI, in watts, else in HP units
-     * @param speed        speed: if SI, in meters per second (MPS), otherwise MPH
-     * @return the calculated tractive force: if SI units, in Newtons, else in tons
+     * @param appliedPower in HP units
+     * @param speed        speed in MPH
+     * @return the calculated tractive force in tons
      */
     static double getTractiveForce(double appliedPower, double speed) {
         return TON_FORCE_BY_MPH_PER_HP / speed * appliedPower; // tons;
@@ -342,7 +342,7 @@ public class TrainPhysics implements Serializable {
         List<Engine> engines = trainRevenues.getTrainEngines().get(rl.getId());
         boolean endStop = endStop(trainRevenues, rl);
 
-        return getTrainMotions(engines, carWeights, rl.getGrade(), rl.getSpeedLimit(), rl.getDistance(), endStop, priorSpeed);
+        return getTrainMotions(engines, carWeights, Setup.getCarFaceArea(), rl.getGrade(), rl.getDegreeOfCurvature(), priorSpeed, rl.getSpeedLimit(), rl.getDistance(), endStop);
     }
 
     /**
@@ -353,33 +353,30 @@ public class TrainPhysics implements Serializable {
      * the acceleration sequence, ending with brunching the train, the very opposite of the stretching motion, and
      * finally coming to a stop at the given route segment end point.
      *
-     * @param engines       List of all engines pulling this train
-     * @param carWeights    ordered list of all car weights in this train
-     * @param gradePercent  the grade in percentage units
-     * @param speedLimit    route speed limit in MPS (SI) or MPH
-     * @param distanceLimit initial position in meters (SI) or miles
-     * @param endStop       true if this route location requires coming to a stop at its end
-     * @param priorSpeed    speed in MPH on entering this route location segment
+     * @param engines           List of all engines pulling this train
+     * @param carWeights        ordered list of all car weights in this train
+     * @param carFaceArea       average area of the leading face of cars, in sq. ft.
+     * @param gradePercent      the grade in percentage units
+     * @param degreeOfCurvature direction change in degrees for 100' scale chord on curve
+     * @param priorSpeed        speed in MPH on entering this route location segment
+     * @param speedLimit        route speed limit in MPH
+     * @param distanceLimit     initial position in miles
+     * @param endStop           true if this route location requires coming to a stop at its end
      * @return Map of TrainMotion lists traversing a route location
      */
-    static List<TrainMotion> getTrainMotions(List<Engine> engines, List<Integer> carWeights, double gradePercent, int speedLimit, double distanceLimit, boolean endStop, double priorSpeed) {
+    static List<TrainMotion> getTrainMotions(List<Engine> engines, List<Integer> carWeights, double carFaceArea, double gradePercent, double degreeOfCurvature, double priorSpeed, double speedLimit, double distanceLimit, boolean endStop) {
         List<TrainMotion> trainMotionList = new ArrayList<>();
-
-        List<TrainMotion> cruiseList = new ArrayList<>();
-        List<TrainMotion> decelList = new ArrayList<>();
+        if (engines == null) {
+            return trainMotionList;
+        }
 
         double fullPower = 0;
         double driverWeight = 0;
         double engineWeight = 0;
-        if (engines == null) {
-            System.out.println("Alert: engines is null in getTrainMotions()");
-            return trainMotionList;
-        } else {
-            for (Engine engine : engines) {
-                fullPower += engine.getHpInteger();
-                driverWeight += driverWeight(engine);
-                engineWeight += engine.getAdjustedWeightTons();
-            }
+        for (Engine engine : engines) {
+            fullPower += engine.getHpInteger();
+            driverWeight += driverWeight(engine);
+            engineWeight += engine.getAdjustedWeightTons();
         }
 
         TrainMotion priorTrainMotion = new TrainMotion("segment: new");
@@ -394,9 +391,9 @@ public class TrainPhysics implements Serializable {
         } else {
             priorTrainMotion = getStretchMotion(driverWeight, engineWeight, carWeights, fullPower, gradePercent);
             trainMotionList.add(priorTrainMotion);
-
             priorTrainMotion = getTrainMotionAfterAcceleration(trainMotionList, priorTrainMotion, driverWeight, engineWeight, carWeights, gradePercent, fullPower, distanceLimit, speedLimit);
         }
+        List<TrainMotion> decelList = new ArrayList<>();
         if (endStop) {
             priorTrainMotion = getTrainMotionAfterDeceleration(decelList, priorTrainMotion, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit, 0);
         }
@@ -414,7 +411,8 @@ public class TrainPhysics implements Serializable {
 
         double cruiseDistance = distanceLimit - totalTravelDistance;
         priorTrainMotion = TrainMotion.getFinalTrainMotion(trainMotionList);
-        TrainMotion cruiseMotion = cruiseMotion(priorTrainMotion, engineWeight, carWeights, fullPower, gradePercent, cruiseDistance);
+        TrainMotion cruiseMotion = cruiseMotion(priorTrainMotion, engineWeight, carWeights, carFaceArea, fullPower, gradePercent, cruiseDistance, degreeOfCurvature);
+        List<TrainMotion> cruiseList = new ArrayList<>();
         cruiseList.add(cruiseMotion);
 
         double addedTime = cruiseMotion.t - TrainMotion.getFinalTrainMotion(trainMotionList).t;
@@ -433,10 +431,8 @@ public class TrainPhysics implements Serializable {
         tm.t = priorTrainMotion.t;
         tm.x = priorTrainMotion.x;
         tm.v = priorTrainMotion.v;
+        tm.w = priorTrainMotion.w;
         trainMotionList.add(tm);
-        //        } else {
-        //            priorTrainMotion.d = "segment: end";
-        //        }
 
         return trainMotionList;
     }
@@ -449,11 +445,11 @@ public class TrainPhysics implements Serializable {
             return true;
         }
     }
-
+/*
     static boolean isSI() {
         return Setup.getLengthUnit().equals(Setup.METER);
     }
-
+*/
     /**
      * rule for temperatures above freezing
      *
@@ -467,9 +463,9 @@ public class TrainPhysics implements Serializable {
         return month < Calendar.DECEMBER && Calendar.FEBRUARY < month;
     }
 
-    static TrainMotion getTrainMotionAfterDeceleration(List<TrainMotion> decelList, TrainMotion priorTrainMotion, double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double distanceLimit, double speedLimit) {
+    static TrainMotion getTrainMotionAfterDeceleration(List<TrainMotion> decelList, TrainMotion priorTrainMotion, double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double distanceLimit, double finalSpeed) {
         int newSpeed = (int) Math.round(priorTrainMotion.v);
-        for (int speed = newSpeed - 1; speed >= speedLimit; speed--) {
+        for (int speed = newSpeed - 1; speed >= finalSpeed; speed--) {
             TrainMotion newTrainMotion = getNewTrainMotion(priorTrainMotion, speed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
             if (newTrainMotion == null) { // requested new speed value not achieved
                 break;
@@ -481,7 +477,7 @@ public class TrainPhysics implements Serializable {
         return priorTrainMotion;
     }
 
-    static TrainMotion getTrainMotionAfterAcceleration(List<TrainMotion> accelList, TrainMotion priorTrainMotion, double driverWeight, double engineWeight, List<Integer> carWeights, double gradePercent, double fullPower, double distanceLimit, int speedLimit) {
+    static TrainMotion getTrainMotionAfterAcceleration(List<TrainMotion> accelList, TrainMotion priorTrainMotion, double driverWeight, double engineWeight, List<Integer> carWeights, double gradePercent, double fullPower, double distanceLimit, double speedLimit) {
         int topSpeed = 1 + (int) priorTrainMotion.v;
         for (int newSpeed = topSpeed; newSpeed <= speedLimit; newSpeed++) {
             TrainMotion newTrainMotion = getNewTrainMotion(priorTrainMotion, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
@@ -496,11 +492,12 @@ public class TrainPhysics implements Serializable {
     }
 
     static boolean endStop(TrainRevenues trainRevenues, RouteLocation rl) {
-        return trainRevenues.getTrainPickUpsOrDropOffs().contains(rl.getId());
+        return rl == null || endStop(trainRevenues,rl.getId());
     }
 
     static boolean endStop(TrainRevenues trainRevenues, String rlId) {
-        return rlId == null || trainRevenues.getTrainPickUpsOrDropOffs().contains(rlId);
+        Integer switchingActions = trainRevenues.getTrainPickUpsOrDropOffs().get(rlId);
+        return switchingActions == null ? true : switchingActions > 0;
     }
 
     /**
@@ -517,10 +514,10 @@ public class TrainPhysics implements Serializable {
     /**
      * Applied power is full power reduced by the ratio of applied force to available force
      *
-     * @param fullPower    full power to accelerate motion in watts (SI) or HP
-     * @param speed        speed in MPS (SI) or MPH
-     * @param driverWeight driver wheels weight load available for applied force in Newtons (SI) or tons
-     * @return power in watts (SI) or PH
+     * @param fullPower    full power to accelerate motion in HP
+     * @param speed        speed in MPH
+     * @param driverWeight driver wheels weight load available for applied force in tons
+     * @return power in HP
      */
     static double appliedPower(double fullPower, double speed, double driverWeight) {
         double tractiveForce = getTractiveForce(fullPower, speed);
@@ -557,8 +554,10 @@ public class TrainPhysics implements Serializable {
         return WHEEL_TRACK_ADHESION * BRAKE_APPLICATION_LIMIT * totalWeight;
     }
 
-    static TrainMotion cruiseMotion(TrainMotion priorTrainMotion, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double cruiseDistance) {
+    static TrainMotion cruiseMotion(TrainMotion priorTrainMotion, double engineWeight, List<Integer> carWeights, double carFaceArea, double fullPower, double gradePercent, double cruiseDistance, double degreeOfCurvature) {
         double carsWeight = carWeights.stream().mapToInt(w -> w).sum();
+        int carCount = carWeights.size();
+        int axleCount = Setup.getAxlesPerCar() * carCount;
         double totalWeight = engineWeight + carsWeight;
         // parameters for cruise (constant speed motion)
         double brakingForceLimit = brakingForceSafetyLimit(totalWeight);
@@ -569,17 +568,18 @@ public class TrainPhysics implements Serializable {
         double brake = 0;
 
         double gradeDrag = getGradeDrag(totalWeight, gradePercent);
-        double rollingDrag = getRollingDrag(totalWeight, cruiseSpeed, 100, 25);
-        double netCruiseForce = gradeDrag + rollingDrag;
-        double appliedPower = netCruisePower(netCruiseForce, cruiseSpeed);
+        double curveDrag = getCurveDrag(degreeOfCurvature, totalWeight);
+        double rollingDrag = getRollingDrag(totalWeight, cruiseSpeed, axleCount, carCount, carFaceArea);
+        double totalDrag = rollingDrag + gradeDrag + curveDrag;
+        double appliedPower = netCruisePower(totalDrag, cruiseSpeed);
         if (appliedPower > 0) {
             throttle = 100 * appliedPower / fullPower;
         } else {
             appliedPower = 0;
-            brake = -100 * netCruiseForce / brakingForceLimit;
+            brake = -100 * totalDrag / brakingForceLimit;
         }
 
-        return new TrainMotion(cruiseTime, priorTrainMotion.t + cruiseTime, priorDistance + cruiseDistance, cruiseSpeed, 0, netCruiseForce, appliedPower, throttle, brake, "steady speed");
+        return new TrainMotion(cruiseTime, priorTrainMotion.t + cruiseTime, priorDistance + cruiseDistance, cruiseSpeed, 0, totalWeight, totalDrag, appliedPower, throttle, brake, "steady speed");
     }
 
     static double driverWeight(Engine engine) {
@@ -612,9 +612,9 @@ public class TrainPhysics implements Serializable {
      * approach will be used as standard, since it reduces the stress on couplers and initial traction dependencies.
      *
      * @param engineWeight engine weight including possible tender
-     * @param driverWeight driver wheels weight load available for starting force in Newtons (SI) or tons
+     * @param driverWeight driver wheels weight load available for starting force in tons
      * @param gradePercent the grade in percentage units
-     * @return the calculated net force in Newtons (SI) or tons
+     * @return the calculated net force in tons
      */
     static double netForceAtRest(double engineWeight, double driverWeight, double gradePercent) {
         double gradeDrag = getGradeDrag(engineWeight, gradePercent);
@@ -641,16 +641,13 @@ public class TrainPhysics implements Serializable {
      * produces less tractive force. This is the higher static friction force an experienced engineer can obtain, by
      * careful throttle control to just avoid wheel spin.
      *
-     * @param driversWeight driver wheel weight load available for starting force in Newtons (SI) or tons
-     * @return the calculated tractive force in Newtons (SI) or tons
+     * @param driversWeight driver wheel weight load available for starting force in tons
+     * @return the calculated tractive force in tons
      */
     static double tractiveForceLimit(double driversWeight) {
         return Math.min(COUPLER_PULL_LIMIT_TONS, tractionForceLimit(driversWeight));
     }
-
-    /*
-    //–––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
-
+/*
     private final StringBuilder reportSummary = new StringBuilder();
     private final List<TrainMotion> routeTrainMotions = new ArrayList<>();
 
@@ -821,5 +818,5 @@ public class TrainPhysics implements Serializable {
             }
         }
     }
-    */
+*/
 }

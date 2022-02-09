@@ -69,6 +69,10 @@ public class TrainCsvCommon extends TrainCommon {
         printer.printRecord("TN", Bundle.getMessage("csvTrainName"), name); // NOI18N
     }    
 
+    protected final void printTrainRoute(CSVPrinter printer, String name) throws IOException {
+        printer.printRecord("TR", Bundle.getMessage("csvTrainRoute"), name); // NOI18N
+    }
+
     protected final void printTrainTerminates(CSVPrinter printer, String name) throws IOException {
         printer.printRecord("TT", Bundle.getMessage("csvTrainTerminates"), name);
     }

@@ -238,6 +238,7 @@ public class RouteManager extends PropertyChangeSupport implements InstanceManag
         if (!invert) {
             rlNew.setDropAllowed(rl.isDropAllowed());
             rlNew.setPickUpAllowed(rl.isPickUpAllowed());
+            rlNew.setDegreeOfCurvature(rl.getDegreeOfCurvature());
             rlNew.setGrade(rl.getGrade());
             rlNew.setTrainDirection(rl.getTrainDirection());
             rlNew.setMaxTrainLength(rl.getMaxTrainLength());

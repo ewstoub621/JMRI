@@ -31,8 +31,6 @@ class TrainPhysicsTest {
     private static final float TOTAL_TONS = X_TRAIN_TONS + X_LOCO_TONS;
     private static final float CAR_COUNT = X_CAR_COUNT + X_LOCO_TONS / 180f;
     private static final float AXLE_COUNT = CAR_COUNT * X_AXLES_PER_CAR;
-    private static final float TONS_PER_CAR = TOTAL_TONS / CAR_COUNT;
-    private static final float TONS_PER_AXLE = TONS_PER_CAR / X_AXLES_PER_CAR;
     // --> results
     private static float ADHESION_DRAG_LBS() { return 1.3f * TOTAL_TONS; }
     private static float AIR_DRAG_LBS() { return 0.0005f * X_CAR_FACE_AREA * CAR_COUNT * SPEED * SPEED; }
@@ -75,14 +73,16 @@ class TrainPhysicsTest {
         double distanceLimit;
         int steps = 19;
 
-        if (DEBUG)
+        if (DEBUG) {
             System.out.println("\ntestGetNewSpeedTrainMotion:\n" + TrainMotion.getMotionsHeader());
+        }
         for (int i = ZERO; i < steps; i++) {
             distanceLimit = distance - tm.x;
             double newSpeed = i + 1;
             tm = getNewTrainMotion(tm, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
-            if (DEBUG)
+            if (DEBUG && tm != null) {
                 System.out.println(tm.getMotionData());
+            }
             assertNotNull(tm);
             assertEquals(newSpeed, tm.v);
         }
@@ -91,16 +91,17 @@ class TrainPhysicsTest {
             distanceLimit = distance - tm.x;
             double newSpeed = steps - i;
             tm = getNewTrainMotion(tm, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
-            if (DEBUG)
+            if (DEBUG && tm != null) {
                 System.out.println(tm.getMotionData());
+            }
             assertNotNull(tm);
             assertEquals(newSpeed, tm.v);
         }
         assertEquals(ZERO, tm.v);
-        if (DEBUG)
+        if (DEBUG) {
             System.out.println("acceleration elapsed time = " + accelTime);
-        if (DEBUG)
             System.out.println("deceleration elapsed time = " + (tm.t - accelTime));
+        }
     }
 
     @Test
@@ -108,8 +109,7 @@ class TrainPhysicsTest {
         double limitLbs = 250000; // lbs
 
         double expectedLimitTons = limitLbs / LBS_PER_TON; // 125 tons
-        double calculatedLimitTons = COUPLER_PULL_LIMIT_TONS;
-        assertEquals(expectedLimitTons, calculatedLimitTons);
+        assertEquals(expectedLimitTons, COUPLER_PULL_LIMIT_TONS);
     }
 
     @Test
@@ -165,7 +165,7 @@ class TrainPhysicsTest {
         double airDragTP = getAirDrag(X_CAR_COUNT, SPEED, 110); // 0.555835
         double bearingDragTP = getBearingDrag(AXLE_COUNT); // 5.0202
         double flangeDragTP = getFlangeDrag(TOTAL_TONS, SPEED); // 2.75288
-        double rollingDragTP = getRollingDrag(TOTAL_TONS, SPEED, AXLE_COUNT, CAR_COUNT); // 13.42526
+        double rollingDragTP = getRollingDrag(TOTAL_TONS, SPEED, AXLE_COUNT, CAR_COUNT, 110); // 13.42526
         double expectRollingDragTP = adhesionDragTP + airDragTP + bearingDragTP + flangeDragTP; // 13.39438
 
         assertEquals(expectRollingDragAAK, rollingDragAAK, .0001);
@@ -194,8 +194,6 @@ class TrainPhysicsTest {
         List<Integer> carWeights = Arrays.asList(75, 25, 75, 25, 75, 25, 75, 25, 75);
         double fullPower = 9000;
         double gradePercent = 2.5;
-        boolean isRoller = false;
-        boolean isWarm = false;
 
         assertNotNull(getStretchMotion(driverWeight, engineWeight, carWeights, fullPower, gradePercent));
     }
@@ -215,7 +213,7 @@ class TrainPhysicsTest {
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
 
-        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, ZERO, speedLimit, TEN, endStop, priorSpeed);
+        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
         if (DEBUG) {
             System.out.println("\ntestTrainMotionsDeadStartEndStop:\n" + TrainMotion.getMotionsHeader());
             for (TrainMotion tm : trainMotionList) {
@@ -228,6 +226,7 @@ class TrainPhysicsTest {
         assertEquals(speed2, trainMotionList.get(2).v, 0.001);
 
         TrainMotion finalTrainMotion = TrainMotion.getFinalTrainMotion(trainMotionList);
+        assertNotNull(finalTrainMotion);
         assertEquals(ZERO, finalTrainMotion.v, 0.001);
         assertEquals(TEN, finalTrainMotion.x, 0.001);
     }
@@ -242,7 +241,7 @@ class TrainPhysicsTest {
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
 
-        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, ZERO, speedLimit, TEN, endStop, priorSpeed);
+        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
         if (DEBUG) {
             System.out.println("\ntestTrainMotionsDeadStartNoEndStop:\n" + TrainMotion.getMotionsHeader());
             for (TrainMotion tm : trainMotionList) {
@@ -255,6 +254,7 @@ class TrainPhysicsTest {
         assertEquals(speed2, trainMotionList.get(2).v, 0.001);
 
         TrainMotion finalTrainMotion = TrainMotion.getFinalTrainMotion(trainMotionList);
+        assertNotNull(finalTrainMotion);
         assertEquals(speedLimit, finalTrainMotion.v, 2);
         assertEquals(TEN, finalTrainMotion.x, 0.001);
     }
@@ -269,7 +269,7 @@ class TrainPhysicsTest {
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
 
-        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, ZERO, speedLimit, TEN, endStop, priorSpeed);
+        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
         if (DEBUG) {
             System.out.println("\ntestTrainMotionsFastStartEndStop:\n" + TrainMotion.getMotionsHeader());
             for (TrainMotion tm : trainMotionList) {
@@ -282,6 +282,7 @@ class TrainPhysicsTest {
         assertEquals(speed1, trainMotionList.get(1).v, 0.001);
 
         TrainMotion finalTrainMotion = TrainMotion.getFinalTrainMotion(trainMotionList);
+        assertNotNull(finalTrainMotion);
         assertEquals(ZERO, finalTrainMotion.v, 0.001);
         assertEquals(TEN, finalTrainMotion.x, 0.001);
     }
@@ -296,7 +297,7 @@ class TrainPhysicsTest {
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
 
-        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, ZERO, speedLimit, TEN, endStop, priorSpeed);
+        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
         if (DEBUG) {
             System.out.println("\ntestTrainMotionsFastStartNoEndStop:\n" + TrainMotion.getMotionsHeader());
             for (TrainMotion tm : trainMotionList) {
@@ -309,6 +310,7 @@ class TrainPhysicsTest {
         assertEquals(speed1, trainMotionList.get(1).v, 0.001);
 
         TrainMotion finalTrainMotion = TrainMotion.getFinalTrainMotion(trainMotionList);
+        assertNotNull(finalTrainMotion);
         assertEquals(speedLimit, finalTrainMotion.v, 0.001);
         assertEquals(TEN, finalTrainMotion.x, 0.001);
     }
@@ -323,7 +325,7 @@ class TrainPhysicsTest {
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
 
-        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, ZERO, speedLimit, TEN, endStop, priorSpeed);
+        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
         if (DEBUG) {
             System.out.println("\ntestTrainMotionsSlowStartEndStop:\n" + TrainMotion.getMotionsHeader());
             for (TrainMotion tm : trainMotionList) {
@@ -336,6 +338,7 @@ class TrainPhysicsTest {
         assertEquals(speed1, trainMotionList.get(1).v, 0.001);
 
         TrainMotion finalTrainMotion = TrainMotion.getFinalTrainMotion(trainMotionList);
+        assertNotNull(finalTrainMotion);
         assertEquals(ZERO, finalTrainMotion.v, 0.001);
         assertEquals(TEN, finalTrainMotion.x, 0.001);
     }
@@ -350,7 +353,7 @@ class TrainPhysicsTest {
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
 
-        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, ZERO, speedLimit, TEN, endStop, priorSpeed);
+        List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
         if (DEBUG) {
             System.out.println("\ntestTrainMotionsSlowStartNoEndStop:\n" + TrainMotion.getMotionsHeader());
             for (TrainMotion tm : trainMotionList) {
@@ -363,6 +366,7 @@ class TrainPhysicsTest {
         assertEquals(speed1, trainMotionList.get(1).v, 0.001);
 
         TrainMotion finalTrainMotion = TrainMotion.getFinalTrainMotion(trainMotionList);
+        assertNotNull(finalTrainMotion);
         assertEquals(speedLimit, finalTrainMotion.v, 2);
         assertEquals(TEN, finalTrainMotion.x, 0.001);
     }
@@ -384,11 +388,9 @@ class TrainPhysicsTest {
         double[] gradePercent = new double[]{-1, -2, 3, ZERO};
         int speedLimit = 40; // MPS
         double[] distance = new double[]{TEN, TEN, TEN, TEN};
-        boolean journal = true;
-        boolean warm = false;
 
         for (int i = ZERO; i < 4; i++) {
-            List<TrainMotion> trainMotionList = getTrainMotions(engines.get(i), carWeights.get(i), gradePercent[i], speedLimit, distance[i], false, ZERO);
+            List<TrainMotion> trainMotionList = getTrainMotions(engines.get(i), carWeights.get(i), 110, gradePercent[i], 2.5, ZERO, speedLimit, distance[i], false);
             assertFalse(trainMotionList.isEmpty());
         }
     }

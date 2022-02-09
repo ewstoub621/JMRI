@@ -14,16 +14,22 @@ import jmri.jmrit.operations.routes.RouteLocation;
 import jmri.jmrit.operations.routes.RouteManager;
 import jmri.jmrit.operations.setup.Setup;
 import jmri.util.JUnitOperationsUtil;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
+import java.time.LocalDate;
 import java.util.*;
 
+import static jmri.jmrit.operations.trains.TrainCsvRevenue.TOTAL_COL;
 import static jmri.jmrit.operations.trains.TrainMotion.getFinalTrainMotion;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -33,7 +39,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainCsvRevenueTest extends OperationsTestCase {
-    private static final boolean DEBUG = true;
+    private static final int GREATER_THAN = 1;
+    private static final boolean DEBUG = false;
     private static final String ID = "1";
     private static final int LENGTH = 1000;
     private static final int LOC_1 = 1;
@@ -44,6 +51,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     private static final int LOC_6 = 6;
     private static final int LOC_7 = 7;
     private static final double TRAIN_TOTAL_REVENUE = 6983.75;
+    private static final double TRAIN_TOTAL_COST = 5476.79;
 
     private CarManager carManager;
     private CarTypes carTypes;
@@ -203,7 +211,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         carLoads.setDefaultEmptyName(dEn);
         carLoads.setDefaultLoadName(dLn);
 
-        route = new Route(ID, "Route" + ID);
+        route = new Route(ID, "Peddler " + ID);
         routeManager.register(route);
 
         train = registerNewTrain();
@@ -219,7 +227,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         RouteLocation rl4 = null;
         RouteLocation rl5 = null;
         RouteLocation rl6 = null;
-        int customerNumber = 1;
+        int customerNumber = GREATER_THAN;
         Location location;
         // create Tracks, Locations, RouteLocations, and freight cars
         for (int loc = LOC_1; loc <= LOC_7; loc++) {
@@ -227,7 +235,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
 
             switch (loc) {
                 case LOC_1:
-                    registerNewRouteLocation(loc, 2 * loc, -1.0, location);
+                    registerNewRouteLocation(loc, 2 * loc, -1.0, 0.0, location);
 
                     track = createNewTrack(0, location, "Yard " + loc, Track.YARD);
                     updateCar(road, "C10099", "Caboose", dEn, track).setCaboose(true);
@@ -238,7 +246,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("NKP", "99713", "HopGrain", dLn, track);
                     break;
                 case LOC_2:
-                    registerNewRouteLocation(loc, 2 * loc, -2.0, location);
+                    registerNewRouteLocation(loc, 2 * loc, -2.0, 0.0, location);
 
                     track = createNewTrack(customerNumber, location, "Customer " + customerNumber + "-" + loc, Track.SPUR);
                     updateCar("C&O", "51137", "FD-coil", dLn, track);
@@ -251,7 +259,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("N&W", "76566", "Hopper", "Feed", track);
                     break;
                 case LOC_3:
-                    rl3 = registerNewRouteLocation(loc, 2 * loc, 2.0, location);
+                    rl3 = registerNewRouteLocation(loc, 2 * loc, 2.0, 0.0, location);
 
                     createNewTrack(0, location, "Yard " + loc, Track.YARD);
 
@@ -264,7 +272,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("UP", "46774D", "Stock", dLn, track);
                     break;
                 case LOC_4:
-                    rl4 = registerNewRouteLocation(loc, 2 * loc, 1.0, location);
+                    rl4 = registerNewRouteLocation(loc, 2 * loc, 1.0, 0.0, location);
                     createNewTrack(0, location, "Yard " + loc, Track.YARD);
 
                     track = createNewTrack(customerNumber, location, "Customer " + customerNumber + "-" + loc, Track.SPUR);
@@ -275,13 +283,13 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("VGN", "15508", "Hopper", dLn, track);
                     break;
                 case LOC_5:
-                    rl5 = registerNewRouteLocation(loc, 2 * loc, 0, location);
+                    rl5 = registerNewRouteLocation(loc, 2 * loc, 0, 1.0, location);
                     break;
                 case LOC_6:
-                    rl6 = registerNewRouteLocation(loc, 2 * loc, 0, location);
+                    rl6 = registerNewRouteLocation(loc, 2 * loc, 0, 2.0, location);
                     break;
                 case LOC_7:
-                    registerNewRouteLocation(loc, 2 * loc, 0.0, location);
+                    registerNewRouteLocation(loc, 2 * loc, 0.0, 0.0, location);
                     createNewTrack(6, location, "Yard " + loc, Track.YARD);
                     break;
             }
@@ -394,9 +402,9 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
             for (String cell : line.split(",")) {
                 boolean added = false;
                 if (cell != null && !cell.isEmpty() && Character.isDigit(cell.charAt(0))) {
-                    int lastCellIndex = rowCells.size() - 1;
+                    int lastCellIndex = rowCells.size() - GREATER_THAN;
                     String lastCell = rowCells.get(lastCellIndex);
-                    if (lastCell != null && !lastCell.isEmpty() && Character.isDigit(lastCell.charAt(lastCell.length() - 1))) {
+                    if (lastCell != null && !lastCell.isEmpty() && Character.isDigit(lastCell.charAt(lastCell.length() - GREATER_THAN))) {
                         String newCell = lastCell + ',' + cell;
                         rowCells.set(lastCellIndex, newCell.replace("\"", ""));
                         added = true;
@@ -435,10 +443,11 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         return location;
     }
 
-    private RouteLocation registerNewRouteLocation(int sequenceNumber, int wait, double grade, Location location) {
+    private RouteLocation registerNewRouteLocation(int sequenceNumber, int wait, double grade, double degreeOfCurvature, Location location) {
         String rlId = ID + "r" + sequenceNumber;
         RouteLocation routeLocation = new RouteLocation(rlId, location);
         routeLocation.setGrade(grade);
+        routeLocation.setDegreeOfCurvature(degreeOfCurvature);
         routeLocation.setSequenceNumber(sequenceNumber);
         routeLocation.setWait(wait);
         routeLocation.setTrainDirection(RouteLocation.EAST);
@@ -552,64 +561,47 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         assertFalse(train.isBuilt());
         TrainRevenues trainRevenues = train.getTrainRevenues();
         assertNotNull(trainRevenues);
-        assertEquals(1, trainRevenues.getMaxRouteTransportFee().compareTo(BigDecimal.ZERO));
-/*
-        TrainPhysics trainPhysics = new TrainPhysics(train, true);
-        assertNotNull(trainPhysics);
-        if (DEBUG && Locale.getDefault().equals(defaultLocale)) {
-            System.out.println(trainPhysics);
-        }
-*/
+        assertEquals(GREATER_THAN, trainRevenues.getMaxRouteTransportFee().compareTo(BigDecimal.ZERO));
+        assertEquals(GREATER_THAN, trainRevenues.getRouteFuelCost().compareTo(BigDecimal.ZERO));
+
         Map<String, List<TrainMotion>> trainMotions = trainRevenues.getTrainMotions();
         assertFalse(trainMotions.isEmpty());
-        List<TrainMotion> thisMotionList;
         String lastRlId = null;
-        String thisRlId;
         for (Map.Entry<String, List<TrainMotion>> e : trainMotions.entrySet()) {
-            thisRlId = e.getKey();
-            thisMotionList = e.getValue();
-            if (thisMotionList != null && !thisMotionList.isEmpty()) {
-                TrainMotion startTrainMotion = thisMotionList.get(0);
-                TrainMotion finalTrainMotion = getFinalTrainMotion(thisMotionList);
-                boolean startMotionHasSpeed = 1 <= startTrainMotion.v;
-                boolean startMotionAtRest = TrainPhysics.endStop(trainRevenues, lastRlId);
-                assertEquals(startMotionAtRest, !startMotionHasSpeed, "route " + thisRlId + " has start speed fault");
-                boolean finalMotionHasSpeed = 1 <= finalTrainMotion.v;
-                boolean finalMotionAtRest = TrainPhysics.endStop(trainRevenues, thisRlId);
-                assertEquals(finalMotionAtRest, !finalMotionHasSpeed, "route " + thisRlId + " has final speed fault");
+            String thisRlId = e.getKey();
+            List<TrainMotion> trainMotionList = e.getValue();
+            if (trainMotionList != null && !trainMotionList.isEmpty()) {
+                if (DEBUG) {
+                    System.out.println(String.format("\nRouteLocation id \"%s\":\n", thisRlId));
+                    System.out.println(TrainMotion.getMotionsHeader());
+                    for (TrainMotion tm : trainMotionList) {
+                        System.out.println(tm.getMotionData());
+                    }
+                }
+
+                double startSpeed = trainMotionList.get(0).v;
+                double finalSpeed = getFinalTrainMotion(trainMotionList).v;
+                assertEquals(TrainPhysics.endStop(trainRevenues, lastRlId), startSpeed < GREATER_THAN, "route " + thisRlId + " has start speed fault");
+                assertEquals(TrainPhysics.endStop(trainRevenues, thisRlId), finalSpeed < GREATER_THAN, "route " + thisRlId + " has final speed fault");
             }
             lastRlId = thisRlId;
         }
 
-        TreeMap<Integer, List<String>> csvRevenueAsTreeMap = getCsvRevenueAsTreeMap(train);
-        List<String> lastRowValues = csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1);
-        assertEquals(NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_REVENUE)), csvRevenueAsTreeMap.get(csvRevenueAsTreeMap.size() - 1).get(lastRowValues.size() - 1));
-/*
-        TrainMotion lastTm = trainPhysics.getRouteTrainMotions().get(0);
-        if (DEBUG)
-            System.out.println(TrainMotion.getMotionsHeader());
-        for (TrainMotion thisTm : trainPhysics.getRouteTrainMotions()) {
-            if (DEBUG) {
-                System.out.println(thisTm.getMotionData());
-            }
-            assertTrue(lastTm.t <= thisTm.t);
-            assertTrue(lastTm.x <= thisTm.x);
-            assertTrue(Math.abs(lastTm.v - thisTm.v) <= 2, "big jump is speed:\nlastTm=" + lastTm + "\nthisTm=" + thisTm);
-            lastTm = thisTm;
-        }
-*/
-        for (Map.Entry<String, List<TrainMotion>> e : trainRevenues.getTrainMotions().entrySet()) {
-            String rlId = e.getKey();
-            List<TrainMotion> trainMotionList = e.getValue();
-            if (!trainMotionList.isEmpty()) {
-                System.out.println(rlId);
-                System.out.println(TrainMotion.getMotionsHeader());
-                for (TrainMotion tm : trainMotionList) {
-                    System.out.println(tm.getMotionData());
+        Map<Integer, List<String>> csvRevenueAsTreeMap = getCsvRevenueAsTreeMap(train);
+        for (List<String> rowValues : csvRevenueAsTreeMap.values()) {
+            if (!rowValues.isEmpty()) {
+                if (TrainCsvRevenue.RTT.equals(rowValues.get(0))) {
+                    String expectedRttString = NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_REVENUE));
+                    String finalRttString = rowValues.get(TOTAL_COL + 3);
+                    assertEquals(expectedRttString, finalRttString);
+                }
+                if (TrainCsvRevenue.OTT.equals(rowValues.get(0))) {
+                    String expectedOttString = NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_COST));
+                    String finalOttString = rowValues.get(TOTAL_COL + 3);
+                    assertEquals(expectedOttString, finalOttString);
                 }
             }
         }
-
     }
 
 }

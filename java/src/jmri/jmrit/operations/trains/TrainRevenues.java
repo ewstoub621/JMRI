@@ -25,10 +25,61 @@ import java.util.function.Function;
  * @author Everett Stoub Copyright (C) 2021
  */
 public class TrainRevenues implements Serializable {
-    private static final long serialVersionUID = 4L;
-
     public static final int ORIG = 0;
     public static final int TERM = 1;
+    private static final long serialVersionUID = 4L;
+    // energy costs
+    private static final double BTUS_PER_DOLLAR_COAL = 820000.;
+    private static final double BTUS_PER_DOLLAR_ELECTRIC = 22700.;
+    private static final double BTUS_PER_DOLLAR_OIL = 51000.;
+    private static final double BTU_PER_SEC_PER_HP = 42.424294330155 / 60.;
+    // power efficiency
+    private static final double EFF_DIESEL = 0.225;
+    private static final double EFF_ELECTRIC = 0.23;
+    private static final double EFF_OTHER = 0.19;
+    private static final double EFF_STEAM = 0.065;
+    // locomotive operational costs
+    private static final double ANNUAL_RESERVES_PER_HP_DIESEL = 12.; // Dollars
+    private static final double ANNUAL_RESERVES_PER_HP_ELECTRIC = 15.; // Dollars
+    private static final double ANNUAL_RESERVES_PER_HP_STEAM = 1.; // Dollars
+    private static final double ANNUAL_RESERVES_PER_HP_OTHER = 8.; // Dollars
+    private static final double DAILY_LABOR_RATE_ENGINEER = 40.; // Dollars
+    private static final double DAILY_LABOR_RATE_CONDUCTOR = 37.50; // Dollars
+    private static final double DAILY_LABOR_RATE_FIREMAN = 31.75; // Dollars
+    private static final double DAILY_LABOR_RATE_BRAKEMAN = 32.25; // Dollars
+    private static final double MOE_PER_TON_MILE = 0.0434; // Dollars
+    private static final double MOW_PER_TON_MILE = 0.0372; // Dollars
+    private static final double TGNA_PER_TON_MILE = 0.0372; // Dollars
+    private static final double SERVICE_COST_PER_1000_TON_MILES_DIESEL = 0.36; // Dollars
+    private static final double SERVICE_COST_PER_1000_TON_MILES_ELECTRIC = 0.10; // Dollars
+    private static final double SERVICE_COST_PER_1000_TON_MILES_STEAM = 0.44; // Dollars
+    private static final double SERVICE_COST_PER_1000_TON_MILES_OTHER = 0.03; // Dollars
+    private static final double SERVICE_RATE_PER_FUEL_COST_DIESEL = 0.10; // fraction
+    private static final double SERVICE_RATE_PER_FUEL_COST_ELECTRIC = 0.20; // fraction
+    private static final double SERVICE_RATE_PER_FUEL_COST_STEAM = 0.02; // fraction
+    private static final double SERVICE_RATE_PER_FUEL_COST_OTHER = 0.06; // fraction
+
+    private final Map<String, Map<String, CarRevenue>> carRevenueMapByCarId = new TreeMap<>();
+    private final Map<String, Map<String, Integer>> spurCapacityMapByCustomer = new HashMap<>();
+    private final Set<String> carIdsInDemur = new TreeSet<>();
+    private final Set<String> carIdsInMulctSet = new TreeSet<>();
+    private final Map<String, Integer> trainPickUpOrDropOff = new HashMap<>();
+    private final Map<String, List<Engine>> trainEngines = new HashMap<>();
+    private final Map<String, String[]> origTrackIdsByCarId = new HashMap<>();
+    private final Map<String, List<Integer>> trainCarWeights = new HashMap<>();
+    private final Map<String, List<TrainMotion>> trainMotions = new HashMap<>();
+    private BigDecimal maxRouteTransportFee = BigDecimal.ZERO;
+    private transient Train train;
+    private Double routeMoeCost;
+    private Double routeFuelCost;
+    private Double routeLaborCost;
+    private Double routeMowCost;
+    private Double routeReservesCost;
+    private Double routeServiceCost;
+
+    public TrainRevenues(Train train) {
+        this.train = train;
+    }
 
     public static String getCustomer(Car car) {
         if (car.getTrack() == null) {
@@ -73,6 +124,7 @@ public class TrainRevenues implements Serializable {
     }
 
     public static File getTrainRevenuesCsvFile(Train train) throws IOException {
+        updateOperationsCosts(train.getTrainRevenues());
         new TrainCsvRevenue(train);
 
         File file = InstanceManager.getDefault(TrainManagerXml.class).getTrainCsvRevenueFile(train);
@@ -80,6 +132,11 @@ public class TrainRevenues implements Serializable {
             return null;
         }
         return file;
+    }
+
+    private static void updateOperationsCosts(TrainRevenues trainRevenues) {
+        trainRevenues.setRouteQuadCosts();
+        trainRevenues.setRouteLaborCost();
     }
 
     public static File getTrainRevenuesSerFile(Train train) {
@@ -97,23 +154,6 @@ public class TrainRevenues implements Serializable {
         cars.sort(Comparator.comparing((Function<Car, String>) RollingStock::getRoadName).thenComparing(RollingStock::getNumber));
 
         return cars;
-    }
-
-    private final Map<String, Map<String, CarRevenue>> carRevenueMapByCarId = new TreeMap<>();
-    private final Map<String, Map<String, Integer>> spurCapacityMapByCustomer = new HashMap<>();
-    private final Set<String> carIdsInDemur = new TreeSet<>();
-    private final Set<String> carIdsInMulctSet = new TreeSet<>();
-    private final Set<String> trainPickUpOrDropOff = new TreeSet<>();
-    private final Map<String, List<Engine>> trainEngines = new HashMap<>();
-    private final Map<String, String[]> origTrackIdsByCarId = new HashMap<>();
-    private final Map<String, List<Integer>> trainCarWeights = new HashMap<>();
-    private final Map<String, List<TrainMotion>> trainMotions = new HashMap<>();
-    private BigDecimal maxRouteTransportFee = BigDecimal.ZERO;
-
-    private transient Train train;
-
-    public TrainRevenues(Train train) {
-        this.train = train;
     }
 
     public Collection<CarRevenue> getCarRevenues() {
@@ -137,10 +177,241 @@ public class TrainRevenues implements Serializable {
         return map;
     }
 
-    public BigDecimal getMaxRouteTransportFee() { return maxRouteTransportFee; }
+    public BigDecimal getMaxRouteTransportFee() {
+        return maxRouteTransportFee;
+    }
 
     public Map<String, String[]> getOrigTrackIdsByCarId() {
         return origTrackIdsByCarId;
+    }
+
+    public BigDecimal getRouteMoeCost() {
+        if (routeMoeCost == null) {
+            return BigDecimal.ZERO;
+        } else {
+            return BigDecimal.valueOf(routeMoeCost);
+        }
+    }
+
+    public BigDecimal getRouteFuelCost() {
+        if (routeFuelCost == null) {
+            return BigDecimal.ZERO;
+        } else {
+            return BigDecimal.valueOf(routeFuelCost);
+        }
+    }
+
+    /**
+     * Fuel costs depend on route location transit times, engines and types, and the total power produced by the train's
+     * engines.
+     */
+    public void setRouteQuadCosts() {
+        routeFuelCost = 0.;
+        routeMowCost = 0.;
+        routeMoeCost = 0.;
+        routeReservesCost = 0.;
+        routeServiceCost = 0.;
+        int routeCrews = getRouteCrews();
+        for (Map.Entry<String, List<TrainMotion>> e : trainMotions.entrySet()) {
+            String rlId = e.getKey();
+            setRouteLocationQuadCosts(e.getValue(), rlId, routeCrews);
+        }
+    }
+
+    /**
+     * Route location fuel cost is calculated from applied power from all engines, by engine type, according to the
+     * general power efficiency of the engine type and the cost of the corresponding fuel. It is assumed that each
+     * engine contributes equally to the total horsepower applied to hauling the train.
+     *
+     * @param trainMotions List of train motions for the route with ID matching the rlId parameter
+     * @param rlId         the ID for the route location under consideration
+     * @param routeCrews   the number of crews needed for the train on this route
+     */
+    private void setRouteLocationQuadCosts(List<TrainMotion> trainMotions, String rlId, int routeCrews) {
+        double hpSeconds = 0;
+        for (TrainMotion tm : trainMotions) {
+            hpSeconds += tm.p * tm.dt;
+        }
+        double engineCount = 0;
+
+        double dieselEngines = 0;
+        double electricEngines = 0;
+        double steamerEngines = 0;
+        double otherEngines = 0;
+
+        double dieselHp = 0;
+        double electricHp = 0;
+        double steamerHp = 0;
+        double otherHp = 0;
+
+        List<Engine> engineList = trainEngines.get(rlId);
+        if (engineList != null) {
+            for (Engine engine : engineList) {
+                engineCount++;
+                switch (engine.getTypeName()) {
+                    case "Diesel":
+                        dieselEngines++;
+                        dieselHp += engine.getHpInteger();
+                        break;
+                    case "Electric":
+                        electricEngines++;
+                        electricHp += engine.getHpInteger();
+                        break;
+                    case "Steam":
+                        steamerEngines++;
+                        steamerHp += engine.getHpInteger();
+                        break;
+                    default:
+                        otherEngines++;
+                        otherHp += engine.getHpInteger();
+                }
+            }
+        }
+        if (engineCount != 0) {
+            double btusPerEngine = BTU_PER_SEC_PER_HP * hpSeconds / engineCount;
+
+            double routeFuelCostDiesel = btusPerEngine * dieselEngines / EFF_DIESEL / BTUS_PER_DOLLAR_OIL;
+            double routeFuelCostElectric = btusPerEngine * electricEngines / EFF_ELECTRIC / BTUS_PER_DOLLAR_ELECTRIC;
+            double routeFuelCostSteam = btusPerEngine * steamerEngines / EFF_STEAM / BTUS_PER_DOLLAR_COAL;
+            double routeFuelCostOther = btusPerEngine * otherEngines / EFF_OTHER / BTUS_PER_DOLLAR_OIL;
+
+            this.routeFuelCost += routeFuelCostDiesel;
+            this.routeFuelCost += routeFuelCostElectric;
+            this.routeFuelCost += routeFuelCostSteam;
+            this.routeFuelCost += routeFuelCostOther;
+
+            routeServiceCost += SERVICE_RATE_PER_FUEL_COST_DIESEL * routeFuelCostDiesel;
+            routeServiceCost += SERVICE_RATE_PER_FUEL_COST_ELECTRIC * routeFuelCostElectric;
+            routeServiceCost += SERVICE_RATE_PER_FUEL_COST_STEAM * routeFuelCostSteam;
+            routeServiceCost += SERVICE_RATE_PER_FUEL_COST_OTHER * routeFuelCostOther;
+
+            TrainMotion finalTrainMotion = TrainMotion.getFinalTrainMotion(trainMotions);
+            if (finalTrainMotion != null) {
+                double miles = finalTrainMotion.x;
+                double tons = finalTrainMotion.w;
+                double tonMiles = tons * miles;
+                routeMoeCost += MOE_PER_TON_MILE * tonMiles;
+                routeMowCost += MOW_PER_TON_MILE * tonMiles;
+                routeReservesCost +=  TGNA_PER_TON_MILE * tonMiles;
+
+                routeServiceCost += SERVICE_COST_PER_1000_TON_MILES_DIESEL * tonMiles / 1000 * dieselEngines;
+                routeServiceCost += SERVICE_COST_PER_1000_TON_MILES_ELECTRIC * tonMiles / 1000 * electricEngines;
+                routeServiceCost += SERVICE_COST_PER_1000_TON_MILES_STEAM * tonMiles / 1000 * steamerEngines;
+                routeServiceCost += SERVICE_COST_PER_1000_TON_MILES_OTHER * tonMiles / 1000 * otherEngines;
+            }
+            double annualUsePerEngine = routeCrews / 250.;
+
+            routeReservesCost += ANNUAL_RESERVES_PER_HP_DIESEL * dieselHp * dieselEngines * annualUsePerEngine;
+            routeReservesCost += ANNUAL_RESERVES_PER_HP_ELECTRIC * electricHp * electricEngines * annualUsePerEngine;
+            routeReservesCost += ANNUAL_RESERVES_PER_HP_STEAM * steamerHp * steamerEngines * annualUsePerEngine;
+            routeReservesCost += ANNUAL_RESERVES_PER_HP_OTHER * otherHp * otherEngines * annualUsePerEngine;
+        }
+    }
+
+    public BigDecimal getRouteTonMiles() {
+        double tonMiles = 0;
+        for (List<TrainMotion> list : trainMotions.values()) {
+            TrainMotion finalTrainMotion = TrainMotion.getFinalTrainMotion(list);
+            if (finalTrainMotion != null) {
+                tonMiles += finalTrainMotion.w * finalTrainMotion.x;
+            }
+        }
+
+        return BigDecimal.valueOf(tonMiles);
+    }
+
+    public BigDecimal getRouteLaborCost() {
+        if (routeLaborCost == null) {
+            return BigDecimal.ZERO;
+        } else {
+            return BigDecimal.valueOf(routeLaborCost);
+        }
+    }
+
+    /**
+     * Labor cost is calculated by the number of shifts required to run the train's assigned route, according to travel
+     * times for each segment, plus switching times, if any, at each segment end point, and accounting for crew
+     * composition and associated direct crew labor costs.
+     */
+    public void setRouteLaborCost() {
+        if (routeLaborCost == null) {
+            routeLaborCost = 0.;
+            int routeCrews = getRouteCrews();
+            calculateRouteLaborCost(routeCrews);
+        }
+    }
+
+    private void calculateRouteLaborCost(int routeCrews) {
+        int crewPerShift = Integer.parseInt(Setup.getTrainCrewCount());
+        int crewEngineers = 0;
+        if (crewPerShift > 0) {
+            crewEngineers++;
+            crewPerShift--;
+        }
+        int crewConductors = 0;
+        if (crewPerShift > 0) {
+            crewConductors++;
+            crewPerShift--;
+        }
+        int crewFiremen = 0;
+        if (crewPerShift > 0) {
+            crewFiremen++;
+            crewPerShift--;
+        }
+        int crewBrakemen = crewPerShift;
+
+        routeLaborCost += crewEngineers * routeCrews * DAILY_LABOR_RATE_ENGINEER;
+        routeLaborCost += crewConductors * routeCrews * DAILY_LABOR_RATE_CONDUCTOR;
+        routeLaborCost += crewBrakemen * routeCrews * DAILY_LABOR_RATE_BRAKEMAN;
+        routeLaborCost += crewFiremen * routeCrews * DAILY_LABOR_RATE_FIREMAN;
+    }
+
+    private int getRouteCrews() {
+        double routeShifts = 0; // assume 8-hour shifts, no O/T - crew change required at last stop
+        int routeCrews = 1; // initial number of crews is 1
+        for (Map.Entry<String, List<TrainMotion>> e : trainMotions.entrySet()) {
+            TrainMotion finalTrainMotion = TrainMotion.getFinalTrainMotion(e.getValue());
+            if (finalTrainMotion != null) {
+                routeShifts += finalTrainMotion.t / 3600. / ANNUAL_RESERVES_PER_HP_OTHER;
+            }
+            Integer switchingActions = trainPickUpOrDropOff.get(e.getKey());
+            if (switchingActions != null) {
+                routeShifts += switchingActions * Setup.getSwitchTime() / 60. / ANNUAL_RESERVES_PER_HP_OTHER;
+            }
+            if (routeShifts > ANNUAL_RESERVES_PER_HP_STEAM) {
+                routeShifts--;
+                routeCrews++; // add another crew for each additional shift as required
+            }
+        }
+        return routeCrews;
+    }
+
+    public BigDecimal getRouteMowCost() {
+        if (routeMowCost == null) {
+            return BigDecimal.ZERO;
+        } else {
+            return BigDecimal.valueOf(routeMowCost);
+        }
+    }
+
+    public BigDecimal getRouteOverheadCost() {
+        if (routeReservesCost == null) {
+            return BigDecimal.ZERO;
+        } else {
+            return BigDecimal.valueOf(routeReservesCost);
+        }
+    }
+
+    public BigDecimal getRouteServiceCost() {
+        if (routeServiceCost == null) {
+            return BigDecimal.ZERO;
+        } else {
+            return BigDecimal.valueOf(routeServiceCost);
+        }
+    }
+
+    public BigDecimal getRouteTotalCost() {
+        return getRouteFuelCost().add(getRouteLaborCost()).add(getRouteMoeCost()).add(getRouteMowCost()).add(getRouteOverheadCost());
     }
 
     public Map<String, Map<String, Integer>> getSpurCapacityMapByCustomer() {
@@ -155,13 +426,21 @@ public class TrainRevenues implements Serializable {
         this.train = train;
     }
 
-    public Map<String, List<Integer>> getTrainCarWeights() { return trainCarWeights; }
+    public Map<String, List<Integer>> getTrainCarWeights() {
+        return trainCarWeights;
+    }
 
-    public Map<String, List<Engine>> getTrainEngines() { return trainEngines; }
+    public Map<String, List<Engine>> getTrainEngines() {
+        return trainEngines;
+    }
 
-    public Map<String, List<TrainMotion>> getTrainMotions() { return trainMotions; }
+    public Map<String, List<TrainMotion>> getTrainMotions() {
+        return trainMotions;
+    }
 
-    public Set<String> getTrainPickUpsOrDropOffs() { return trainPickUpOrDropOff; }
+    public Map<String, Integer> getTrainPickUpsOrDropOffs() {
+        return trainPickUpOrDropOff;
+    }
 
     public void loadOrigTrackIdsByCarId() {
         for (Car car : InstanceManager.getDefault(CarManager.class).getList(train)) {
@@ -499,8 +778,7 @@ public class TrainRevenues implements Serializable {
             if (engine.getRouteLocation() == rl && engine.getRouteDestination() != rl) {
                 if (rlNext != null) {
                     Location location = rlNext.getLocation();
-                    if (location.getPickupRS() > 0 || location.getDropRS() > 0)
-                        trainPickUpOrDropOff.add(rl.getId());
+                    trainPickUpOrDropOff.put(rl.getId(), location.getPickupRS() + location.getDropRS());
                 }
                 trainEngines.computeIfAbsent(rl.getId(), k -> new ArrayList<>());
                 trainEngines.get(rl.getId()).add(engine);

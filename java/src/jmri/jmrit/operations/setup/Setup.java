@@ -151,7 +151,7 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
     public static final String DROP_COMMENT = Bundle.getMessage("SetOut_Msg");
     public static final String PICKUP_COMMENT = Bundle.getMessage("PickUp_Msg");
     public static final String HAZARDOUS = Bundle.getMessage("Hazardous");
-    public static final String BLANK = " "; // blank has be a character or a space
+    public static final String BLANK = " "; // blank must be a character or a space
     public static final String TAB = Bundle.getMessage("Tab"); // used to tab out in tabular mode
     public static final String TAB2 = Bundle.getMessage("Tab2");
     public static final String TAB3 = Bundle.getMessage("Tab3");
@@ -199,6 +199,8 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
     private int maxEngineSize = 6; // maximum number of engines that can be assigned to a train
     private int horsePowerPerTon = 1; // Horsepower per ton
     private int carMoves = 5; // default number of moves when creating a route
+    private int axlesPerCar = 4; // typical US freight car designs
+    private int carFaceArea = 110; // typical US freight car designs, in square feet
     private String carTypes = DESCRIPTIVE;
     private String ownerName = NONE;
     private String fontName = MONOSPACED;
@@ -305,8 +307,7 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
 
     private boolean trainIntoStagingCheck = true; // staging track must accept train's rolling stock types and roads
     private boolean trackImmediatelyAvail = false; // when true staging track is available for other trains
-    private boolean allowCarsReturnStaging = false; // allow cars on a turn to return to staging if necessary (prevent
-                                                    // build failure)
+    private boolean allowCarsReturnStaging = false; // allow cars on a turn to return to staging if necessary (prevent build failure)
     private boolean promptFromStaging = false; // prompt user to specify which departure staging track to use
     private boolean promptToStaging = false; // prompt user to specify which arrival staging track to use
     private boolean tryNormalModeStaging = true; // try normal build if route length failure using aggressive
@@ -345,6 +346,7 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
     private String switchTanks = "250";
     private String switchWoody = "350";
     private String trainSpeedLimit = "40";
+    private String trainCrewCount = "5";
 
     // train revenue parameter changes
     public static final String REVENUE_CANCELLED_MULCT_CHANGE = "revenueCancelledMulctChange";
@@ -735,6 +737,22 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
 
     public static int getCarMoves() {
         return getDefault().carMoves;
+    }
+
+    public static void setAxlesPerCar(int axlesPerCar) {
+        getDefault().axlesPerCar = axlesPerCar;
+    }
+
+    public static int getAxlesPerCar() {
+        return getDefault().axlesPerCar;
+    }
+
+    public static void setCarFaceArea(int carFaceArea) {
+        getDefault().carFaceArea = carFaceArea;
+    }
+
+    public static int getCarFaceArea() {
+        return getDefault().carFaceArea;
     }
 
     public static String getPanelName() {
@@ -1752,6 +1770,7 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
     public static String getDemurCredits()        { return getDefault().demurCredits; }
     public static String getMaxDiscount()         { return getDefault().maxDiscount; }
     public static String getTrainSpeedLimit()     { return getDefault().trainSpeedLimit; }
+    public static String getTrainCrewCount()      { return getDefault().trainCrewCount; }
 
     public static void setDemurCredits(String demurCredits) {
         String old = getDefault().demurCredits;
@@ -1856,6 +1875,13 @@ public class Setup extends PropertyChangeSupport implements InstanceManagerAutoD
         getDefault().trainSpeedLimit = trainSpeedLimit;
         if (old == null || !old.equals(trainSpeedLimit)) {
             setDirtyAndFirePropertyChange(TRAIN_SPEED_LIMIT_CHANGE, old, trainSpeedLimit);
+        }
+    }
+    public static void setTrainCrewCount(String trainCrewCount) {
+        String old = getDefault().trainCrewCount;
+        getDefault().trainCrewCount = trainCrewCount;
+        if (old == null || !old.equals(trainCrewCount)) {
+            setDirtyAndFirePropertyChange(TRAIN_SPEED_LIMIT_CHANGE, old, trainCrewCount);
         }
     }
 
