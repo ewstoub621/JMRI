@@ -223,7 +223,7 @@ public class Xml {
     static final String REVENUE_SWITCHING_WOODY = "SwitchingWoody"; // NOI18N
     static final String REVENUE_SWITCHING_TANKS = "SwitchingTanks"; // NOI18N
     static final String REVENUE_TRANSPORT_RATE = "RouteRate"; // NOI18N
-    static final String REVENUE_ADDED_HAZARD_FEE = "AddedHazardFee"; // NOI18N
+    static final String REVENUE_ADDED_HAZARD_FEE = "HazardTariff"; // NOI18N
     static final String REVENUE_CANCELLED_MULCT = "CancelledMulct"; // NOI18N
     static final String REVENUE_DIVERSION_MULCT = "DiversionMulct"; // NOI18N
     static final String REVENUE_DEMURRAGE_RR = "DemurrageRR"; // NOI18N

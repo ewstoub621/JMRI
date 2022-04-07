@@ -19,23 +19,21 @@ import java.util.Map;
  */
 public class TrainRevenueParametersPanel extends OperationsPreferencesPanel implements java.beans.PropertyChangeListener {
     public static final String SPACE = " ";
-    private static final List<String> FIELD_NAME_LIST =
-            Arrays.asList( // panel display line order
-                           "SwitchingEmpty",
-                           "SwitchingLoads",
-                           "SwitchingAggrs",
-                           "SwitchingGrain",
-                           "SwitchingMetal",
-                           "SwitchingTanks",
-                           "SwitchingWoody",
-                           "AddedHazardFee",
-                           "CancelledMulct",
-                           "DiversionMulct",
-                           "DemurrageRR",
-                           "DemurrageXX",
-                           "DemurrageCredits",
-                           "MaximumDiscount"
-            );
+    private static final List<String> FIELD_NAME_LIST = Arrays.asList( // panel display line order
+            "SwitchingEmpty",
+            "SwitchingAggrs",
+            "SwitchingGrain",
+            "SwitchingTanks",
+            "SwitchingMetal",
+            "SwitchingWoody",
+            "SwitchingLoads",
+            "HazardTariff",
+            "CancelledMulct",
+            "DiversionMulct",
+            "DemurrageRR",
+            "DemurrageXX",
+            "DemurrageCredits",
+            "MaximumDiscount");
     private final Map<String, JTextField> jTextFieldMap = new HashMap<>();
     JButton saveButton = new JButton(Bundle.getMessage("ButtonSave"));
 
@@ -177,83 +175,83 @@ public class TrainRevenueParametersPanel extends OperationsPreferencesPanel impl
 
     private String getSetupValue(String name) {
         switch (name) {
-        case "AddedHazardFee":
-            return Setup.getHazardFee();
-        case "CancelledMulct":
-            return Setup.getCancelMulct();
-        case "DemurrageRR":
-            return Setup.getDemurrageRR();
-        case "DemurrageXX":
-            return Setup.getDemurrageXX();
-        case "DemurrageCredits":
-            return Setup.getDemurCredits();
-        case "DiversionMulct":
-            return Setup.getDivertMulct();
-        case "MaximumDiscount":
-            return Setup.getMaxDiscount();
-        case "SwitchingEmpty":
-            return Setup.getSwitchEmpty();
-        case "SwitchingLoads":
-            return Setup.getSwitchLoads();
-        case "SwitchingAggrs":
-            return Setup.getSwitchAggrs();
-        case "SwitchingGrain":
-            return Setup.getSwitchGrain();
-        case "SwitchingMetal":
-            return Setup.getSwitchMetal();
-        case "SwitchingTanks":
-            return Setup.getSwitchTanks();
-        case "SwitchingWoody":
-            return Setup.getSwitchWoody();
-        default:
-            return Bundle.getMessage(name);
+            case "SwitchingEmpty":
+                return Setup.getSwitchEmpty();
+            case "SwitchingAggrs":
+                return Setup.getSwitchAggrs();
+            case "SwitchingGrain":
+                return Setup.getSwitchGrain();
+            case "SwitchingTanks":
+                return Setup.getSwitchTanks();
+            case "SwitchingMetal":
+                return Setup.getSwitchMetal();
+            case "SwitchingWoody":
+                return Setup.getSwitchWoody();
+            case "SwitchingLoads":
+                return Setup.getSwitchLoads();
+            case "HazardTariff":
+                return Setup.getHazardFee();
+            case "CancelledMulct":
+                return Setup.getCancelMulct();
+            case "DiversionMulct":
+                return Setup.getDivertMulct();
+            case "DemurrageRR":
+                return Setup.getDemurrageRR();
+            case "DemurrageXX":
+                return Setup.getDemurrageXX();
+            case "DemurrageCredits":
+                return Setup.getDemurCredits();
+            case "MaximumDiscount":
+                return Setup.getMaxDiscount();
+            default:
+                return Bundle.getMessage(name);
         }
     }
 
     private void setSetupValue(String name, String value) {
         switch (name) {
-        case "AddedHazardFee":
-            Setup.setHazardFee(value);
-            break;
-        case "CancelledMulct":
-            Setup.setCancelMulct(value);
-            break;
-        case "DemurrageRR":
-            Setup.setDemurrageRR(value);
-            break;
-        case "DemurrageXX":
-            Setup.setDemurrageXX(value);
-            break;
-        case "DemurrageCredits":
-            Setup.setDemurCredits(value);
-            break;
-        case "DiversionMulct":
-            Setup.setDivertMulct(value);
-            break;
-        case "MaximumDiscount":
-            Setup.setMaxDiscount(value);
-            break;
-        case "SwitchingEmpty":
-            Setup.setSwitchEmpty(value);
-            break;
-        case "SwitchingLoads":
-            Setup.setSwitchLoads(value);
-            break;
-        case "SwitchingAggrs":
-            Setup.setSwitchAggrs(value);
-            break;
-        case "SwitchingGrain":
-            Setup.setSwitchGrain(value);
-            break;
-        case "SwitchingMetal":
-            Setup.setSwitchMetal(value);
-            break;
-        case "SwitchingTanks":
-            Setup.setSwitchTanks(value);
-            break;
-        case "SwitchingWoody":
-            Setup.setSwitchWoody(value);
-            break;
+            case "SwitchingEmpty":
+                Setup.setSwitchEmpty(value);
+                break;
+            case "SwitchingAggrs":
+                Setup.setSwitchAggrs(value);
+                break;
+            case "SwitchingGrain":
+                Setup.setSwitchGrain(value);
+                break;
+            case "SwitchingTanks":
+                Setup.setSwitchTanks(value);
+                break;
+            case "SwitchingMetal":
+                Setup.setSwitchMetal(value);
+                break;
+            case "SwitchingWoody":
+                Setup.setSwitchWoody(value);
+                break;
+            case "SwitchingLoads":
+                Setup.setSwitchLoads(value);
+                break;
+            case "HazardTariff":
+                Setup.setHazardFee(value);
+                break;
+            case "CancelledMulct":
+                Setup.setCancelMulct(value);
+                break;
+            case "DiversionMulct":
+                Setup.setDivertMulct(value);
+                break;
+            case "DemurrageRR":
+                Setup.setDemurrageRR(value);
+                break;
+            case "DemurrageXX":
+                Setup.setDemurrageXX(value);
+                break;
+            case "DemurrageCredits":
+                Setup.setDemurCredits(value);
+                break;
+            case "MaximumDiscount":
+                Setup.setMaxDiscount(value);
+                break;
         }
     }
 
@@ -271,6 +269,7 @@ public class TrainRevenueParametersPanel extends OperationsPreferencesPanel impl
 
         int fieldRow = 0;
         for (String fieldName : FIELD_NAME_LIST) {
+            // group headings
             switch (fieldName) {
             case "MaximumDiscount":
                 addItemLeft(revenueParamsPanel, new JLabel(SPACE), 0, fieldRow++);
@@ -288,21 +287,65 @@ public class TrainRevenueParametersPanel extends OperationsPreferencesPanel impl
                 addItemLeft(revenueParamsPanel, new JLabel(SPACE), 0, fieldRow++);
                 addItemLeft(revenueParamsPanel, new JLabel(Bundle.getMessage("DemurrageTitle")), 0, fieldRow++);
                 break;
-            case "AddedHazardFee":
+            case "HazardTariff":
                 addItemLeft(revenueParamsPanel, new JLabel(SPACE), 0, fieldRow++);
                 addItemLeft(revenueParamsPanel, new JLabel(Bundle.getMessage("HandlingTitle")), 0, fieldRow++);
                 break;
             default:
                 break;
             }
-
+            // subheadings
             addItemLeft(revenueParamsPanel, new JLabel(" - " + Bundle.getMessage(fieldName)), 0, fieldRow);
 
             JTextField jtf = new JTextField(4);
             jtf.setHorizontalAlignment(JTextField.LEFT);
             jtf.setText(getSetupValue(fieldName));
-            String toolTipText = getSetupValue(fieldName + "ToolTip");
-            jtf.setToolTipText(toolTipText);
+            switch (fieldName) {
+                case "SwitchingEmpty":
+                    jtf.setToolTipText(Bundle.getMessage("SwitchingEmptyToolTip"));
+                    break;
+                case "SwitchingAggrs":
+                    jtf.setToolTipText(Bundle.getMessage("SwitchingAggrsToolTip"));
+                    break;
+                case "SwitchingGrain":
+                    jtf.setToolTipText(Bundle.getMessage("SwitchingGrainToolTip"));
+                    break;
+                case "SwitchingTanks":
+                    jtf.setToolTipText(Bundle.getMessage("SwitchingTanksToolTip"));
+                    break;
+                case "SwitchingMetal":
+                    jtf.setToolTipText(Bundle.getMessage("SwitchingMetalToolTip"));
+                    break;
+                case "SwitchingWoody":
+                    jtf.setToolTipText(Bundle.getMessage("SwitchingWoodyToolTip"));
+                    break;
+                case "SwitchingLoads":
+                    jtf.setToolTipText(Bundle.getMessage("SwitchingLoadsToolTip"));
+                    break;
+                case "HazardTariff":
+                    jtf.setToolTipText(Bundle.getMessage("HazardTariffToolTip"));
+                    break;
+                case "CancelledMulct":
+                    jtf.setToolTipText(Bundle.getMessage("CancelledMulctToolTip"));
+                    break;
+                case "DiversionMulct":
+                    jtf.setToolTipText(Bundle.getMessage("DiversionMulctToolTip"));
+                    break;
+                case "DemurrageRR":
+                    jtf.setToolTipText(Bundle.getMessage("DemurrageRRToolTip"));
+                    break;
+                case "DemurrageXX":
+                    jtf.setToolTipText(Bundle.getMessage("DemurrageXXToolTip"));
+                    break;
+                case "DemurrageCredits":
+                    jtf.setToolTipText(Bundle.getMessage("DemurrageCreditsToolTip"));
+                    break;
+                case "MaximumDiscount":
+                    jtf.setToolTipText(Bundle.getMessage("MaximumDiscountToolTip"));
+                    break;
+                default:
+                    break;
+            }
             jTextFieldMap.put(fieldName, jtf);
 
             addItemLeft(revenueParamsPanel, new JLabel(" - " + Bundle.getMessage(fieldName)), 0, fieldRow);

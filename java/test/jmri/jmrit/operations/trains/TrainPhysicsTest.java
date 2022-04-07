@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class TrainPhysicsTest {
     private static final int ZERO = 0;
     private static final int TEN = 10;
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = true;
 
     // ref Train Forces Calculator by AAK (https://web.archive.org/web/20090408120433/http://www.alkrug.vcn.com/rrfacts/RRForcesCalc.html)
     private static final float X_LOCO_HP = 12000f ;
@@ -131,6 +131,11 @@ class TrainPhysicsTest {
     }
 
     @Test
+    public void testCruisePower() {
+        assertEquals(2133.333, netCruisePower(10, 40), .001);
+    }
+
+    @Test
     public void testCurveDrag() {
         // ref Train Forces Calculator by AAK
         assertEquals(CURVE_DRAG_LBS() / LBS_PER_TON, getCurveDrag(X_CURVE_DEGREES, TOTAL_TONS), 1);
@@ -200,7 +205,7 @@ class TrainPhysicsTest {
 
     @Test
     public void testGetTractiveForce() {
-        assertEquals(TON_FORCE_BY_MPH_PER_HP, getTractiveForce(20, 20));
+        assertEquals(TON_FORCE_BY_MPH_PER_HP, getTractiveForce(20, 20), 00001);
     }
 
     @Test

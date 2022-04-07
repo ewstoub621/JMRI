@@ -36,21 +36,21 @@ public class TrainPhysics implements Serializable {
     static final double SLACK_PER_CAR_FEET = 1.8; // couplers plus drawbars
     static final double STRETCH_SPEED_LIMIT_MPH = 2.0;
     static final double TON_FORCE_BY_KMH_PER_NEWTON = 2650;
-    static final double WATTS_PER_HP = 745.7;
     static final double WHEEL_TRACK_ADHESION = 0.25; // coefficient for steel wheel on sanded steel rail
     static final int YEAR_ROLLER_BEARINGS_REQUIRED = 1962;
     // derived constants and conversion factors
     static final double AIR_DRAG_FACTOR = 0.0005 / LBS_PER_TON;
     static final double BRAKE_APPLICATION_LIMIT = 0.25 * BRAKE_DESIGN_LIMIT;
     static final double FLANGE_ADHESION_PER_MPH = 0.045 / LBS_PER_TON;
+    static final double HP_PER_TON_PER_MPH = LBS_PER_TON / FT_LBS_PER_SEC_PER_HP * FEET_PER_MILE / SEC_PER_HOUR; // ~5.3333
     static final double METERS_PER_MILE = FEET_PER_MILE * METERS_PER_FOOT; // ~1609.344
     static final double MILES_PER_KM = KM_PER_METER / METERS_PER_MILE; // ~0.621371
-    static final double MPH_PER_MPS = SEC_PER_HOUR / METERS_PER_MILE;// ~2.236936
     static final double MPH_PER_FPS = SEC_PER_HOUR / FEET_PER_MILE; // ~0.681818
     static final double STRETCH_SPEED_LIMIT_FPS = STRETCH_SPEED_LIMIT_MPH / MPH_PER_FPS;
     static final double STATIC_ADHESION = 1.3 / LBS_PER_TON; // rolling steel wheel on steel rail
     static final double NEWTONS_PER_LB = KG_PER_LB * G_SI;// ~4.4482
     static final double NEWTONS_PER_TON = NEWTONS_PER_LB * LBS_PER_TON; // ~8896.44
+
     // protected derived constants and conversion factors
     protected static final double TON_FORCE_BY_MPH_PER_HP = TON_FORCE_BY_KMH_PER_NEWTON * POWER_EFFICIENCY * MILES_PER_KM / NEWTONS_PER_TON;
 
@@ -129,7 +129,11 @@ public class TrainPhysics implements Serializable {
      * @return the calculated net force in tons
      */
     static double getNetForce(double fullPower, double speed, double totalWeight, double driverWeight, double gradePercent) {
-        return Math.min(tractiveForceLimit(driverWeight), getTractiveForce(fullPower, speed)) - getRollingDrag(totalWeight, speed, 100, 25, 110) - getGradeDrag(totalWeight, gradePercent);
+        return Math.min(
+                tractiveForceLimit(driverWeight),
+                getTractiveForce(fullPower, speed))
+                    - getRollingDrag(totalWeight, speed, 100, 25, 110)
+                    - getGradeDrag(totalWeight, gradePercent);
     }
 
     static TrainMotion getNewTrainMotion(TrainMotion priorTrainMotion, double newSpeed, double driverWeight, double engineWeight, List<Integer> carWeights, double fullPower, double gradePercent, double distanceLimit) {
@@ -320,7 +324,8 @@ public class TrainPhysics implements Serializable {
      * @return the calculated tractive force in tons
      */
     static double getTractiveForce(double appliedPower, double speed) {
-        return TON_FORCE_BY_MPH_PER_HP / speed * appliedPower; // tons;
+        return 2650. * 1000.0 / (5280.0 * 0.0254 * 12.0 * 0.45359237 * G_SI * 2000.0)
+                * POWER_EFFICIENCY * appliedPower / speed; // tons;
     }
 
     /**
@@ -554,7 +559,9 @@ public class TrainPhysics implements Serializable {
         return WHEEL_TRACK_ADHESION * BRAKE_APPLICATION_LIMIT * totalWeight;
     }
 
-    static TrainMotion cruiseMotion(TrainMotion priorTrainMotion, double engineWeight, List<Integer> carWeights, double carFaceArea, double fullPower, double gradePercent, double cruiseDistance, double degreeOfCurvature) {
+    static TrainMotion cruiseMotion(
+            TrainMotion priorTrainMotion, double engineWeight, List<Integer> carWeights, double carFaceArea,
+            double fullPower, double gradePercent, double cruiseDistance, double degreeOfCurvature) {
         double carsWeight = carWeights.stream().mapToInt(w -> w).sum();
         int carCount = carWeights.size();
         int axleCount = Setup.getAxlesPerCar() * carCount;
@@ -596,11 +603,7 @@ public class TrainPhysics implements Serializable {
      * @return HP
      */
     static double netCruisePower(double netForce, double cruiseSpeed) {
-        double netForceSI = netForce * (NEWTONS_PER_TON); // newtons
-        double cruiseSpeedSI = cruiseSpeed / (MPH_PER_MPS); // mps
-        double powerSI = netForceSI * cruiseSpeedSI; // Watts
-
-        return (powerSI / WATTS_PER_HP); // HP
+        return netForce * cruiseSpeed * HP_PER_TON_PER_MPH;
     }
 
     /**
