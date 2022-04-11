@@ -233,8 +233,6 @@ public class OptionPanel extends OperationsPreferencesPanel {
 
         setBuildOption();
         enableComponents();
-
-        initMinimumSize();
     }
 
     private void setBuildOption() {

@@ -1,9 +1,7 @@
 package jmri.jmrit.logixng.implementation;
 
 import java.io.PrintWriter;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnull;
@@ -23,15 +21,51 @@ public abstract class AbstractBase
         extends AbstractNamedBean
         implements Base {
 
+    private final Category _category;
     protected boolean _listenersAreRegistered = false;
 
     public AbstractBase(String sys) throws BadSystemNameException {
         super(sys);
+        _category = Category.ITEM;
     }
 
     public AbstractBase(String sys, String user)
             throws BadUserNameException, BadSystemNameException {
         super(sys, user);
+        _category = Category.ITEM;
+    }
+
+    public AbstractBase(String sys, Category category) throws BadSystemNameException {
+        super(sys);
+        _category = category;
+    }
+
+    public AbstractBase(String sys, String user, Category category)
+            throws BadUserNameException, BadSystemNameException {
+        super(sys, user);
+        _category = category;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Category getCategory() {
+        return _category;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public FemaleSocket getChild(int index) throws IllegalArgumentException, UnsupportedOperationException {
+        // Default implementation is to throw UnsupportedOperationException.
+        // Classes that have children must override this method.
+        throw new UnsupportedOperationException("Not supported.");
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public int getChildCount() {
+        // Default implementation is to return 0 children.
+        // Classes that have children must override this method.
+        return 0;
     }
 
     /** {@inheritDoc} */
@@ -88,8 +122,7 @@ public abstract class AbstractBase
                 MaleSocket connectedSocket = femaleSocket.getConnectedSocket();
                 if ((connectedSocket.getParent() != null)
                         && (connectedSocket.getParent() != femaleSocket)) {
-                    errors.add(String.format(
-                            "The child %s already has the parent %s so it cannot be added to %s",
+                    errors.add(Bundle.getMessage("DuplicateParentMessage",
                             connectedSocket.getSystemName(),
                             connectedSocket.getParent().getSystemName(),
                             getSystemName()));
@@ -114,7 +147,9 @@ public abstract class AbstractBase
      * Important: This method may be called more than once. Methods overriding
      * this method must ensure that listeners are not registered more than once.
      */
-    abstract protected void registerListenersForThisClass();
+    protected void registerListenersForThisClass() {
+        // Do nothing
+    }
 
     /**
      * Unregister listeners if this object needs that.
@@ -122,7 +157,9 @@ public abstract class AbstractBase
      * Important: This method may be called more than once. Methods overriding
      * this method must ensure that listeners are not unregistered more than once.
      */
-    abstract protected void unregisterListenersForThisClass();
+    protected void unregisterListenersForThisClass() {
+        // Do nothing
+    }
 
     /** {@inheritDoc} */
     @Override
@@ -156,7 +193,7 @@ public abstract class AbstractBase
             PrintWriter writer,
             String currentIndent,
             MutableInt lineNumber) {
-        
+
         if (settings._printLineNumbers) {
             writer.append(String.format(PRINT_LINE_NUMBERS_FORMAT, lineNumber.addAndGet(1)));
         }
@@ -172,7 +209,7 @@ public abstract class AbstractBase
             PrintWriter writer,
             String indent,
             MutableInt lineNumber) {
-        
+
         printTree(settings, Locale.getDefault(), writer, indent, "", lineNumber);
     }
 
@@ -184,7 +221,7 @@ public abstract class AbstractBase
             PrintWriter writer,
             String indent,
             MutableInt lineNumber) {
-        
+
         printTree(settings, locale, writer, indent, "", lineNumber);
     }
 
@@ -197,7 +234,7 @@ public abstract class AbstractBase
             String indent,
             String currentIndent,
             MutableInt lineNumber) {
-        
+
         printTreeRow(settings, locale, writer, currentIndent, lineNumber);
 
         for (int i=0; i < getChildCount(); i++) {
@@ -207,6 +244,8 @@ public abstract class AbstractBase
 
     /** {@inheritDoc} */
     @Override
+    @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(value="SLF4J_SIGN_ONLY_FORMAT",
+                                                        justification="Specific log message format")
     public void getUsageTree(int level, NamedBean bean, List<jmri.NamedBeanUsageReport> report, NamedBean cdl) {
         log.debug("## {} :: {}", level, this.getLongDescription());
         level++;
@@ -236,7 +275,9 @@ public abstract class AbstractBase
      * Listeners do not need to be unregistered by this method since they are
      * unregistered by dispose().
      */
-    abstract protected void disposeMe();
+    protected void disposeMe() {
+        // Do nothing
+    }
 
     /** {@inheritDoc} */
     @Override
@@ -249,11 +290,20 @@ public abstract class AbstractBase
         disposeMe();
     }
 
-    protected void assertListenersAreNotRegistered(Logger log, String method) {
+    public void assertListenersAreNotRegistered(Logger log, String method) {
         if (_listenersAreRegistered) {
             RuntimeException e = new RuntimeException(method + " must not be called when listeners are registered");
             log.error(method + " must not be called when listeners are registered", e);
             throw e;
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void getListenerRefsIncludingChildren(List<String> list) {
+        list.addAll(getListenerRefs());
+        for (int i=0; i < getChildCount(); i++) {
+            getChild(i).getListenerRefsIncludingChildren(list);
         }
     }
 

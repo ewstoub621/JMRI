@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jmri.InstanceManager;
 import jmri.beans.PropertyChangeSupport;
-import jmri.jmrit.operations.OperationsXml;
 import jmri.jmrit.operations.locations.Location;
 import jmri.jmrit.operations.locations.LocationManager;
 import jmri.jmrit.operations.setup.Control;
@@ -37,7 +36,7 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     protected int _maxCarMoves = Setup.getCarMoves();
     protected String _randomControl = DISABLED;
     protected boolean _drops = true; // when true set outs allowed at this location
-    protected boolean _pickups = true; // when true pick-ups allowed at this location
+    protected boolean _pickups = true; // when true pick ups allowed at this location
     protected int _sequenceNum = 0; // used to determine location order in a route
     protected double _grade = 0; // maximum grade between locations
     protected double _degreeOfCurvature = 0; // maximum _degree of curvature between locations
@@ -125,11 +124,11 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
         // property change not needed
         _sequenceNum = sequence;
     }
-    
+
     public int getBlockingOrder() {
         return _blockingOrder;
     }
-    
+
     public void setBlockingOrder(int order) {
         _blockingOrder = order;
     }
@@ -145,7 +144,7 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     public String getComment() {
         return _comment;
     }
-    
+
     public void setCommentColor(Color color) {
         Color old = _commentColor;
         _commentColor = color;
@@ -153,19 +152,19 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
             setDirtyAndFirePropertyChange("RouteLocationCommentColor", old, color); // NOI18N
         }
     }
-    
+
     public Color getCommentColor() {
         return _commentColor;
     }
-    
+
     public String getFormatedColorComment() {
         return TrainCommon.formatColorString(getComment(), getCommentColor());
     }
-  
+
     public void setCommentTextColor(String color) {
         setCommentColor(ColorUtil.stringToColor(color));
     }
-    
+
     public String getCommentTextColor() {
         return ColorUtil.colorToColorName(getCommentColor());
     }
@@ -290,9 +289,9 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     }
 
     /**
-     * When true allow car pick-ups at this location
+     * When true allow car pick ups at this location
      *
-     * @param pickups when true pick-ups allowed at this location
+     * @param pickups when true pick ups allowed at this location
      */
     public void setPickUpAllowed(boolean pickups) {
         boolean old = _pickups;
@@ -335,6 +334,10 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
         return _wait;
     }
 
+    /**
+     * Sets the formated departure time from this location
+     * @param time format hours:minutes
+     */
     public void setDepartureTime(String time) {
         String old = _departureTime;
         _departureTime = time;
@@ -363,12 +366,12 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     public String getDepartureTime() {
         return _departureTime;
     }
-    
+
     public String getDepartureTimeHour() {
         String[] time = getDepartureTime().split(":");
         return time[0];
     }
-    
+
     public String getDepartureTimeMinute() {
         String[] time = getDepartureTime().split(":");
         return time[1];
@@ -479,7 +482,7 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     public int getTrainIconY() {
         return _trainIconY;
     }
-    
+
     /**
      * Gets the X range for detecting the manual movement of a train icon.
      * @return the range for detection
@@ -487,15 +490,6 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
     public int getTrainIconRangeX() {
         return getLocation().getTrainIconRangeX();
     }
-
-
-//    public void setTrainIconRangeY(int y) {
-//        int old = _trainIconRangeY;
-//        _trainIconRangeY = y;
-//        if (old != y) {
-//            setDirtyAndFirePropertyChange("trainIconRangeY", Integer.toString(old), Integer.toString(y)); // NOI18N
-//        }
-//    }
 
     /**
      * Gets the Y range for detecting the manual movement of a train icon.
@@ -546,7 +540,6 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
      *
      * @param e Consist XML element
      */
-    @SuppressWarnings("deprecation") // until there's a replacement for convertFromXmlComment()
     public RouteLocation(Element e) {
         Attribute a;
         if ((a = e.getAttribute(Xml.ID)) != null) {
@@ -647,15 +640,15 @@ public class RouteLocation extends PropertyChangeSupport implements java.beans.P
             try {
                 _sequenceNum = Integer.parseInt(a.getValue());
             } catch (NumberFormatException ee) {
-                log.error("Route location ({}) sequence id ({}) isn't a valid number", getName(), a.getValue());
+                log.error("Route location ({}) sequence id isn't a valid number {}", getName(), a.getValue());
             }
         }
         if ((a = e.getAttribute(Xml.COMMENT_COLOR)) != null) {
             setCommentTextColor(a.getValue());
         }
-        
+
         if ((a = e.getAttribute(Xml.COMMENT)) != null) {
-            _comment = OperationsXml.convertFromXmlComment(a.getValue());
+            _comment = a.getValue();
         }
     }
 

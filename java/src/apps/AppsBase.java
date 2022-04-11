@@ -115,17 +115,10 @@ public abstract class AppsBase {
         // all loaded, initialize objects as necessary
         InstanceManager.getDefault(jmri.LogixManager.class).activateAllLogixs();
         InstanceManager.getDefault(jmri.jmrit.display.layoutEditor.LayoutBlockManager.class).initializeLayoutBlockPaths();
-        
+
         jmri.jmrit.logixng.LogixNG_Manager logixNG_Manager =
                 InstanceManager.getDefault(jmri.jmrit.logixng.LogixNG_Manager.class);
-        java.util.List<String> errors = new ArrayList<>();
-        if (!logixNG_Manager.setupAllLogixNGs(errors)) {
-            for (String s : errors) log.error(s);
-            JOptionPane.showMessageDialog(null,
-                    "<html>"+String.join("<br>", errors)+"</html>",
-                    Bundle.getMessage("TitleError"),
-                    JOptionPane.ERROR_MESSAGE);
-        }
+        logixNG_Manager.setupAllLogixNGs();
         if (InstanceManager.getDefault(LogixNGPreferences.class).getStartLogixNGOnStartup()) {
             logixNG_Manager.activateAllLogixNGs();
         }
@@ -330,14 +323,6 @@ public abstract class AppsBase {
     }
 
     /**
-     * @deprecated for removal since 4.17.2 without replacement
-     */
-    @Deprecated
-    protected void installShutDownManager() {
-        // nothing to do
-    }
-
-    /**
      * Final actions before releasing control of the application to the user,
      * invoked explicitly after object has been constructed in main().
      */
@@ -404,7 +389,7 @@ public abstract class AppsBase {
                 log.warn("JMRI property {} already set to {}, skipping reset to {}", key, current, value);
             }
         } catch (Exception e) {
-            log.error("Unable to set JMRI property {} to {}due to exception: {}", key, value, e);
+            log.error("Unable to set JMRI property {} to {}due to exception", key, value, e);
         }
     }
 

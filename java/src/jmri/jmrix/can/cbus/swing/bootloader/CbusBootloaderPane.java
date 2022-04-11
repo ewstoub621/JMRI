@@ -50,6 +50,13 @@ import org.slf4j.LoggerFactory;
 public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         implements CanListener {
 
+    // EEPROM base address for older PIC18 devices
+    protected static final int EE_START_2580 = 0xf00000;
+    // EEPROM base address for for PIC 18F26K83 and related family members
+    protected static final int EE_START_26K83 = 0x310000;
+    // EEPROM base address for for PIC 18F27Q84 and related family members
+    protected static final int EE_START_27Q84 = 0x380000;
+
     private TrafficController tc;
     private CbusSend send;
     private CbusPreferences preferences;
@@ -65,23 +72,25 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
     private final TextAreaFIFO bootConsole;
     private static final int MAX_LINES = 5000;
     private final JFrame topFrame = (JFrame) getWindowAncestor(this);
-    
+
     // to find and remember the hex file
     final javax.swing.JFileChooser hexFileChooser =
             new JFileChooser(FileUtil.getUserFilesPath());
     // File to hold name of hex file
     transient HexFile hexFile = null;
-    
+
     CbusParameters hardwareParams = null;
     CbusParameters fileParams = null;
-    
+
     boolean hexForBootloader = false;
-    
+
     int nodeNumber;
     int nextParam;
 
+    private int eeStart;
+
     BusyDialog busyDialog;
-    
+
     /**
      * Bootloader state machine states
      */
@@ -97,7 +106,7 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         CONFIG_DATA,
         CONFIG_CHECK_SENT,
         INIT_EEPROM_SENT,
-        EEPROM_DATA,        
+        EEPROM_DATA,
         EEPROM_CHECK_SENT
     }
     protected BootState bootState = BootState.IDLE;
@@ -112,7 +121,7 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         super();
         bootConsole = new TextAreaFIFO(MAX_LINES);
     }
-    
+
     /**
      * {@inheritDoc}
      */
@@ -123,15 +132,15 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         // connect to the CanInterface
         tc = memo.getTrafficController();
         addTc(tc);
-        
+
         send = new CbusSend(memo, bootConsole);
-        
+
         preferences = jmri.InstanceManager.getDefault(jmri.jmrix.can.cbus.CbusPreferences.class);
-        
+
         init();
     }
 
-    
+
     /**
      * Not sure this comment really applies here asa init() does not use the tc
      * Don't use initComponent() as memo doesn't yet exist when that gets called.
@@ -177,20 +186,20 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
                 }
         );
         nnPane.add(nodeNumberField);
-        
+
         // Memory options
         configCheckBox.setText(Bundle.getMessage("BootWriteConfigWords"));
         configCheckBox.setVisible(true);
         eepromCheckBox.setEnabled(true);
         eepromCheckBox.setSelected(false);
         configCheckBox.setToolTipText(Bundle.getMessage("BootWriteConfigWordsTT"));
-        
+
         eepromCheckBox.setText(Bundle.getMessage("BootWriteEeprom"));
         eepromCheckBox.setVisible(true);
         eepromCheckBox.setEnabled(true);
         eepromCheckBox.setSelected(false);
         eepromCheckBox.setToolTipText(Bundle.getMessage("BootWriteEepromTT"));
-        
+
         JPanel memoryPane = new JPanel();
         memoryPane.setBorder(BorderFactory.createTitledBorder(
             BorderFactory.createEtchedBorder(), Bundle.getMessage("BootMemoryOptions")));
@@ -211,7 +220,7 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         readNodeParamsButton.addActionListener((java.awt.event.ActionEvent e) -> {
             readNodeParamsButtonActionPerformed(e);
         });
-        
+
         openFileChooserButton = new JButton(Bundle.getMessage("BootChooseFile"));
         openFileChooserButton.setVisible(true);
         openFileChooserButton.setEnabled(false);
@@ -219,7 +228,7 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         openFileChooserButton.addActionListener((java.awt.event.ActionEvent e) -> {
             openFileChooserButtonActionPerformed(e);
         });
-        
+
         programButton = new JButton(Bundle.getMessage("BootStartProgramming"));
         programButton.setVisible(true);
         programButton.setEnabled(false);
@@ -247,19 +256,19 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         feedbackScroll.setBorder(BorderFactory.createTitledBorder(
             BorderFactory.createEtchedBorder(), Bundle.getMessage("BootConsole")));
         feedbackScroll.setPreferredSize(new Dimension(400, 200));
-        
+
         // Now add to a border layout so that scroll pane will absorb space
         JPanel pane1 = new JPanel();
         pane1.setLayout(new BorderLayout());
         pane1.add(topPane, BorderLayout.PAGE_START);
         pane1.add(feedbackScroll, BorderLayout.CENTER);
-        
+
         add(pane1);
-        
+
         setVisible(true);
     }
 
-    
+
     /**
      * {@inheritDoc}
      */
@@ -275,7 +284,7 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
     private void setMenuOptions(){
         slowWrite.setSelected(false);
         fastWrite.setSelected(false);
-        
+
         switch (preferences.getBootWriteDelay()) {
             case 10:
                 fastWrite.setSelected(true);
@@ -287,11 +296,11 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
                 break;
         }
     }
-    
-    
+
+
     /**
      * Creates a Menu List.
-     * 
+     *
      * {@inheritDoc}
      */
     @Override
@@ -299,29 +308,29 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         List<JMenu> menuList = new ArrayList<>();
 
         JMenu optionsMenu = new JMenu(Bundle.getMessage("Options"));
-        
+
         JMenu writeSpeedMenu = new JMenu(Bundle.getMessage("BootWriteSpeed"));
         ButtonGroup backgroundFetchGroup = new ButtonGroup();
 
         slowWrite = new JRadioButtonMenuItem(Bundle.getMessage("Slow"));
         fastWrite = new JRadioButtonMenuItem(Bundle.getMessage("Fast"));
-        
+
         backgroundFetchGroup.add(slowWrite);
         backgroundFetchGroup.add(fastWrite);
-        
+
         writeSpeedMenu.add(slowWrite);
         writeSpeedMenu.add(fastWrite);
-        
+
         optionsMenu.add(writeSpeedMenu);
-        
+
         menuList.add(optionsMenu);
-        
+
         // saved preferences go through the cbus table model so they can be actioned immediately
         // they'll be also saved by the table, not here.
-        
+
          // values need to match setMenuOptions()
         ActionListener writeSpeedListener = ae -> {
-            if (slowWrite.isSelected()) { 
+            if (slowWrite.isSelected()) {
                 preferences.setBootWriteDelay(CbusNode.BOOT_PROG_TIMEOUT_SLOW);
             }
             else if (fastWrite.isSelected()) {
@@ -330,16 +339,16 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         };
         slowWrite.addActionListener(writeSpeedListener);
         slowWrite.addActionListener(writeSpeedListener);
-        
+
         setMenuOptions();
-        
+
         return menuList;
     }
-    
-    
+
+
     /**
      * Get the delay to be inserted between bootloader data writes
-     * 
+     *
      * @return Delay in ms
      */
     int getWriteDelay() {
@@ -348,20 +357,20 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         }
         return CbusNode.BOOT_PROG_TIMEOUT_FAST;
     }
-    
-    
+
+
     /**
      * Kick off the reading of parameters from the node, starting with parameter
      * 0, the number of parameters
-     * 
-     * @param e 
+     *
+     * @param e
      */
     private void readNodeParamsButtonActionPerformed(java.awt.event.ActionEvent e) {
         try {
             nodeNumber = Integer.parseInt(nodeNumberField.getText());
         } catch (NumberFormatException e1) {
             addToLog(Bundle.getMessage("BootInvalidNode"));
-            log.error("Invalid node number {}");
+            log.error("Invalid node number {}", nodeNumberField.getText());
             return;
         }
         // Read the parameters from the chosen node
@@ -372,13 +381,13 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         busyDialog.start();
         requestParam(nextParam);
     }
-    
-    
+
+
     /**
      * Let the user choose the hex file and check that it is suitable for the
      * selected node.
-     * 
-     * @param e 
+     *
+     * @param e
      */
     private void openFileChooserButtonActionPerformed(java.awt.event.ActionEvent e) {
         // start at current file, show dialog
@@ -386,7 +395,7 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
 
         // handle selection or cancel
         if (retVal == JFileChooser.APPROVE_OPTION) {
-            hexFile = new HexFile(hexFileChooser.getSelectedFile().getPath());
+            hexFile = new HexFile(hexFileChooser.getSelectedFile().getPath(), eeStart);
             log.debug("hex file chosen: {}", hexFile.getName());
             addToLog(MessageFormat.format(Bundle.getMessage("BootFileChosen"), hexFile.getName()));
             try {
@@ -413,11 +422,11 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         }
     }
 
-    
+
     /**
      * Send BOOTM OPC to put module in boot mode
-     * 
-     * @param e 
+     *
+     * @param e
      */
     private void programButtonActionPerformed(java.awt.event.ActionEvent e) {
         if (hasActiveTimers()){
@@ -430,10 +439,10 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         setStartBootTimeout();
         bootState = BootState.START_BOOT;
         CanMessage m = CbusMessage.getBootEntry(nodeNumber, 0);
-        tc.sendCanMessage(m, null);  
+        tc.sendCanMessage(m, null);
     }
-    
-    
+
+
     /**
      * Process some outgoing CAN frames
      * <p>
@@ -462,7 +471,7 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
      * reached the TC transmit thread, by looking for bootloader data write
      * messages here. Testing indicates this is a marked improvement with no
      * failures observed.
-     * 
+     *
      * @param m CanMessage
      */
     @Override
@@ -479,39 +488,39 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             }
         }
     }
-    
-    
+
+
     /**
      * Processes incoming CAN replies
      * <p>
      * The bootloader is only interested in standard parameter responses and
      * extended bootloader responses.
      *
-     * {@inheritDoc} 
+     * {@inheritDoc}
      */
     @Override
     public void reply(CanReply r) {
-        
+
         if ( r.isRtr() ) {
             return;
         }
-        
+
         if (!r.isExtended() ) {
             log.debug("Standard Reply {}", r);
-            
+
             handleStandardReply(r);
         } else {
             log.debug("Extended Reply {} in state {}", r, bootState);
             // Extended messages are only used by the bootloader
-            
+
             handleExtendedReply(r);
         }
     }
-    
-    
+
+
     /**
      * Handle standard ID CAN replies
-     * 
+     *
      * @param r Can reply
      */
     private void handleStandardReply(CanReply r) {
@@ -535,19 +544,31 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
                 addToLog(MessageFormat.format(Bundle.getMessage("BootNodeParametersFinished"), hardwareParams.toString()));
                 busyDialog.finish();
                 busyDialog = null;
+                // Set EEPROM base address depending on module device type
+                if (hardwareParams.getParam(9) == 20) {
+                    log.debug("Using EEPROM base address for PIC 18F25-26K83");
+                    eeStart = EE_START_26K83;
+                } else if ((hardwareParams.getParam(9) == 21) || (hardwareParams.getParam(9) == 22)) {
+                    log.debug("Using EEPROM base address for PIC 18F27-47-57Q84");
+                    eeStart = EE_START_27Q84;
+                } else {
+                    // Other PIC 18
+                    log.debug("Using EEPROM base address for Generic PIC18");
+                    eeStart = EE_START_2580;
+                }
                 openFileChooserButton.setEnabled(true);
             }
         } else {
             // ignoring OPC
         }
     }
-    
-    
+
+
     /**
      * Handle extended ID CAN replies
      * <p>
      * Handle the reply in the bootloader state machine.
-     * 
+     *
      * @param r Can reply
      */
     private void handleExtendedReply(CanReply r) {
@@ -584,10 +605,10 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         }
     }
 
-    
+
     /**
      * Send data to the hardware and keep a running checksum
-     * 
+     *
      * @param address load address
      * @param d       byte array of data being written
      * @param timeout timeout for write operation
@@ -603,19 +624,20 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         addToLog(MessageFormat.format(Bundle.getMessage("BootAddress"), Integer.toHexString(address)));
         tc.sendCanMessage(m, null);
     }
-    
-    
+
+
     /**
      * Write the next data frame for the bootloader
      * <p>
      * CONFIG and EEPROM require a longer timeout as the node bootloader writes
      * them one byte at a time.
-     * 
+     *
      * @return true if there was data to write
      */
     protected boolean writeNextData() {
         byte [] d;
-        
+
+        log.debug("writeNextData()");
         if ((bootAddress == 0x7f8) && (hexForBootloader == true)) {
             log.debug("Pause for bootloader reset");
             // Pause at end of bootloader code to allow time for node to reset
@@ -632,17 +654,17 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             d = hexFile.getConfig(bootAddress - HexFile.CONFIG_START, 8);
             sendData(bootAddress, d, CbusNode.BOOT_CONFIG_TIMEOUT_TIME);
             return true;
-        } else if ((bootAddress >= HexFile.EE_START) && (bootAddress < hexFile.getEeEnd())) {
-            d = hexFile.getEeprom(bootAddress - HexFile.EE_START, 8);
+        } else if ((bootAddress >= eeStart) && (bootAddress < hexFile.getEeEnd())) {
+            d = hexFile.getEeprom(bootAddress - eeStart, 8);
             sendData(bootAddress, d, CbusNode.BOOT_CONFIG_TIMEOUT_TIME);
             return true;
         }
-        
+
         log.debug("No more data to send {}", Integer.toHexString(bootAddress));
         return false;
     }
-    
-    
+
+
     private void nextRegion() {
         clearCheckTimeout();
         log.debug("Node {} checksum OK", nodeNumber);
@@ -650,21 +672,24 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         // Move onto next memory region
         if ((bootState == BootState.PROG_CHECK_SENT) && configCheckBox.isSelected()) {
             // Move onto config words
+            log.debug("Next region: Config words");
             startProgramming(0x300000, BootState.INIT_CONFIG_SENT);
         } else if ((bootState == BootState.PROG_CHECK_SENT) && eepromCheckBox.isSelected()
                 || (bootState == BootState.CONFIG_CHECK_SENT) && eepromCheckBox.isSelected()) {
-            // Move onto eeprom
-            startProgramming(0xF00000, BootState.INIT_EEPROM_SENT);
+            // Move onto EEPROM
+            log.debug("Next region: EEPROM");
+            startProgramming(eeStart, BootState.INIT_EEPROM_SENT);
         } else {
             // Done writing
+            log.debug("Next region: Done");
             sendReset();
-        }   
+        }
     }
-    
-    
+
+
     /**
      * Setup to start programming
-     * 
+     *
      * @param address Start address
      */
     private void startProgramming(int address, BootState state) {
@@ -672,17 +697,17 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         checksum = 0;
         dataFramesSent = 0;
         bootState = state;
-        log.debug("Start writing at address {}", Integer.toHexString(bootAddress));
+        log.debug("Start Programming at address {}", Integer.toHexString(bootAddress));
         addToLog(MessageFormat.format(Bundle.getMessage("BootStartAddress"), Integer.toHexString(bootAddress)));
         setInitTimeout();
         CanMessage m = CbusMessage.getBootInitialise(bootAddress, 0);
         tc.sendCanMessage(m, null);
     }
-    
-    
+
+
     /**
      * Send bootloader reset frame to put the node back into operating mode.
-     * 
+     *
      * There will be no reply to this.
      */
     protected void sendReset() {
@@ -692,8 +717,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         addToLog(Bundle.getMessage("BootFinished"));
         tc.sendCanMessage(m, null);
     }
-    
-    
+
+
     /**
      * Tidy up after programming success or failure
      */
@@ -707,10 +732,10 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         bootState = BootState.IDLE;
     }
 
-    
+
     /**
      * Add array of bytes to checksum
-     * 
+     *
      * @param d the array of bytes
      */
     protected void updateChecksum(byte [] d) {
@@ -719,8 +744,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             checksum += d[i] & 0xFF;
         }
     }
-    
-    
+
+
     /**
      * Request a single Parameter from a Physical Node
      * <p>
@@ -736,8 +761,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         setAllParamTimeout(param);
         send.rQNPN(nodeNumber, param);
     }
-    
-    
+
+
     /**
      * See if any timers are running, ie waiting for a response from a physical Node.
      *
@@ -755,8 +780,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             || configTask != null
             || eeTask != null;
     }
-    
-    
+
+
     private TimerTask allParamTask;
     private TimerTask startBootTask;
     private TimerTask checkBootTask;
@@ -767,8 +792,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
     private TimerTask checkTask;
     private TimerTask configTask;
     private TimerTask eeTask;
-    
-    
+
+
     /**
      * Stop timer for a single parameter fetch
      */
@@ -778,8 +803,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             allParamTask = null;
         }
     }
-    
-    
+
+
     /**
      * Start timer for a Parameter request
      * If 10 timeouts are counted, aborts loop, sets 8 parameters to 0
@@ -802,8 +827,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         };
         TimerUtil.schedule(allParamTask, CbusNode.SINGLE_MESSAGE_TIMEOUT_TIME);
     }
-    
-    
+
+
     /**
      * Stop timer for boot mode request
      */
@@ -813,8 +838,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             startBootTask = null;
         }
     }
-    
-    
+
+
     /**
      * Start timer for boot mode request
      * <p>
@@ -830,13 +855,13 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
                 setCheckBootTimeout();
                 bootState = BootState.CHECK_BOOT_MODE;
                 CanMessage m = CbusMessage.getBootTest(0);
-                tc.sendCanMessage(m, null);  
+                tc.sendCanMessage(m, null);
             }
         };
         TimerUtil.schedule(startBootTask, CbusNode.BOOT_ENTRY_TIMEOOUT_TIME);
     }
-    
-    
+
+
     /**
      * Stop timer for boot mode check
      */
@@ -846,8 +871,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             checkBootTask = null;
         }
     }
-    
-    
+
+
     /**
      * Start timer for boot mode check
      */
@@ -864,8 +889,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         };
         TimerUtil.schedule(checkBootTask, CbusNode.BOOT_SINGLE_MESSAGE_TIMEOUT_TIME);
     }
-    
-    
+
+
     /**
      * Stop timer for initialisation
      */
@@ -875,14 +900,15 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             initTask = null;
         }
     }
-    
-    
+
+
     /**
      * Start timer for initialisation
      * <p>
      * No reply so timeout is expected. Start sending data.
      */
     private void setInitTimeout() {
+        log.debug("setInitTimeout()");
         clearInitTimeout(); // resets if timer already running
         initTask = new TimerTask() {
             @Override
@@ -890,18 +916,21 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
                 initTask = null;
                 if (bootState == BootState.INIT_PROG_SENT) {
                     bootState = BootState.PROG_DATA;
+                    log.debug("Bootstate is PROG_DATA");
                 } else if (bootState == BootState.INIT_CONFIG_SENT) {
                     bootState = BootState.CONFIG_DATA;
+                    log.debug("Bootstate is CONFIG_DATA");
                 } else {
                     bootState = BootState.EEPROM_DATA;
+                    log.debug("Bootstate is EEPROM_DATA");
                 }
                 writeNextData();
             }
         };
         TimerUtil.schedule(initTask, CbusNode.BOOT_SINGLE_MESSAGE_TIMEOUT_TIME);
     }
-    
-    
+
+
     /**
      * Stop timer for bootloader reset pause
      */
@@ -911,8 +940,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             pauseTask = null;
         }
     }
-    
-    
+
+
     /**
      * Start timer for bootloader reset pause
      * <p>
@@ -936,8 +965,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         };
         TimerUtil.schedule(pauseTask, CbusNode.BOOT_PAUSE_TIMEOUT_TIME);
     }
-    
-    
+
+
     /**
      * Stop timer for data writes
      */
@@ -947,8 +976,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             dataTask = null;
         }
     }
-    
-    
+
+
     /**
      * Start timer for data writes
      * <p>
@@ -973,14 +1002,14 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
                     log.debug("Sending checksum {} as 2s complement {}", checksum, 0 - checksum);
                     setCheckTimeout();
                     CanMessage m = CbusMessage.getBootCheck(0 - checksum, 0);
-                    tc.sendCanMessage(m, null);  
+                    tc.sendCanMessage(m, null);
                 }
             }
         };
         TimerUtil.schedule(dataTask, timeout);
     }
-    
-    
+
+
     /**
      * Stop timer for checksum verification
      */
@@ -990,8 +1019,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             checkTask = null;
         }
     }
-    
-    
+
+
     /**
      * Start timer for checksum verification
      */
@@ -1008,20 +1037,20 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
         };
         TimerUtil.schedule(checkTask, CbusNode.BOOT_SINGLE_MESSAGE_TIMEOUT_TIME);
     }
-    
-    
+
+
     /**
      * Add to boot loader Log
-     * 
+     *
      * @param boottext String console message
      */
     public void addToLog(String boottext){
-        ThreadingUtil.runOnGUI( ()->{ 
+        ThreadingUtil.runOnGUI( ()->{
             bootConsole.append("\n"+boottext);
         });
     }
 
-    
+
     /**
      * disconnect from the CBUS
      */
@@ -1031,12 +1060,12 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
             hexFile.dispose();
         }
         // stop timers if running
-        
+
         bootConsole.dispose();
         tc.removeCanListener(this);
     }
 
-    
+
     /**
      * Nested class to create one of these using old-style defaults.
      */
@@ -1049,8 +1078,8 @@ public class CbusBootloaderPane extends jmri.jmrix.can.swing.CanPanel
                     jmri.InstanceManager.getDefault(CanSystemConnectionMemo.class));
         }
     }
-    
-    
+
+
     private final static Logger log = LoggerFactory.getLogger(CbusBootloaderPane.class);
-    
+
 }

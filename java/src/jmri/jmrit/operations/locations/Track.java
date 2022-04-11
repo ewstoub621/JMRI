@@ -13,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import jmri.InstanceManager;
 import jmri.Reporter;
 import jmri.beans.PropertyChangeSupport;
-import jmri.jmrit.operations.OperationsXml;
 import jmri.jmrit.operations.locations.divisions.Division;
 import jmri.jmrit.operations.locations.schedules.Schedule;
 import jmri.jmrit.operations.locations.schedules.ScheduleItem;
@@ -26,6 +25,7 @@ import jmri.jmrit.operations.routes.Route;
 import jmri.jmrit.operations.routes.RouteLocation;
 import jmri.jmrit.operations.setup.Setup;
 import jmri.jmrit.operations.trains.Train;
+import jmri.jmrit.operations.trains.TrainCommon;
 import jmri.jmrit.operations.trains.TrainManager;
 import jmri.jmrit.operations.trains.schedules.TrainSchedule;
 import jmri.jmrit.operations.trains.schedules.TrainScheduleManager;
@@ -207,6 +207,7 @@ public class Track extends PropertyChangeSupport {
     public static final String ALTERNATE_TRACK_CHANGED_PROPERTY = "trackAlternate"; // NOI18N
     public static final String TRACK_BLOCKING_ORDER_CHANGED_PROPERTY = "trackBlockingOrder"; // NOI18N
     public static final String TRACK_REPORTER_PROPERTY = "trackReporterChange"; // NOI18N
+    public static final String ROUTED_CHANGED_PROPERTY = "onlyCarsWithFinalDestinations"; // NOI18N
 
     // IdTag reader associated with this track.
     protected Reporter _reader = null;
@@ -240,9 +241,9 @@ public class Track extends PropertyChangeSupport {
         newTrack.setAlternateTrack(getAlternateTrack());
         newTrack.setBlockCarsEnabled(isBlockCarsEnabled());
         newTrack.setComment(getComment());
-        newTrack.setCommentBoth(getCommentBoth());
-        newTrack.setCommentPickup(getCommentPickup());
-        newTrack.setCommentSetout(getCommentSetout());
+        newTrack.setCommentBoth(getCommentBothWithColor());
+        newTrack.setCommentPickup(getCommentPickupWithColor());
+        newTrack.setCommentSetout(getCommentSetoutWithColor());
 
         newTrack.setDestinationOption(getDestinationOption());
         newTrack.setDestinationIds(getDestinationIds());
@@ -762,8 +763,12 @@ public class Track extends PropertyChangeSupport {
             setDirtyAndFirePropertyChange("trackCommentPickup", old, comment); // NOI18N
         }
     }
-
+    
     public String getCommentPickup() {
+        return TrainCommon.getTextColorString(getCommentPickupWithColor());
+    }
+
+    public String getCommentPickupWithColor() {
         return _commentPickup;
     }
 
@@ -774,8 +779,12 @@ public class Track extends PropertyChangeSupport {
             setDirtyAndFirePropertyChange("trackCommentSetout", old, comment); // NOI18N
         }
     }
-
+    
     public String getCommentSetout() {
+        return TrainCommon.getTextColorString(getCommentSetoutWithColor());
+    }
+
+    public String getCommentSetoutWithColor() {
         return _commentSetout;
     }
 
@@ -786,8 +795,12 @@ public class Track extends PropertyChangeSupport {
             setDirtyAndFirePropertyChange("trackCommentBoth", old, comment); // NOI18N
         }
     }
-
+    
     public String getCommentBoth() {
+        return TrainCommon.getTextColorString(getCommentBothWithColor());
+    }
+
+    public String getCommentBothWithColor() {
         return _commentBoth;
     }
 
@@ -817,7 +830,13 @@ public class Track extends PropertyChangeSupport {
      * @return rolling stock type names
      */
     public String[] getTypeNames() {
-        return _typeList.toArray(new String[0]);
+        List<String> list = new ArrayList<>();
+        for (String typeName : _typeList) {
+            if (_location.acceptsTypeName(typeName)) {
+                list.add(typeName);
+            }
+        }
+        return list.toArray(new String[0]);
     }
 
     private void setTypeNames(String[] types) {
@@ -1956,8 +1975,13 @@ public class Track extends PropertyChangeSupport {
         // okay
         if (!car.getScheduleItemId().equals(NONE)) {
             ScheduleItem si = getSchedule().getItemById(car.getScheduleItemId());
-            if (si != null && checkScheduleItem(si, car).equals(OKAY)) {
-                return OKAY;
+            if (si != null) {
+                String status = checkScheduleItem(si, car);
+                if (status.equals(OKAY)) {
+                    return OKAY;
+                }
+                log.debug("Car ({}) with schedule id ({}) failed check, status: {}", car.toString(),
+                        car.getScheduleItemId(), status);
             }
         }
         // search schedule for a match
@@ -1989,19 +2013,22 @@ public class Track extends PropertyChangeSupport {
     }
 
     private String checkScheduleItem(ScheduleItem si, Car car) {
-        if (!si.getSetoutTrainScheduleId().equals(ScheduleItem.NONE) &&
+        // if car is already assigned to this schedule item allow it to be dropped off
+        // on the wrong day (car arrived late)
+        if (!car.getScheduleItemId().equals(si.getId()) &&
+                !si.getSetoutTrainScheduleId().equals(ScheduleItem.NONE) &&
                 !InstanceManager.getDefault(TrainScheduleManager.class).getTrainScheduleActiveId()
                         .equals(si.getSetoutTrainScheduleId())) {
-            TrainSchedule sch = InstanceManager.getDefault(TrainScheduleManager.class)
+            TrainSchedule trainSch = InstanceManager.getDefault(TrainScheduleManager.class)
                     .getScheduleById(si.getSetoutTrainScheduleId());
-            if (sch != null) {
+            if (trainSch != null) {
                 return SCHEDULE +
                         " (" +
                         getScheduleName() +
                         ") " +
                         Bundle.getMessage("requestCarOnly") +
                         " (" +
-                        sch.getName() +
+                        trainSch.getName() +
                         ")";
             }
         }
@@ -2503,7 +2530,7 @@ public class Track extends PropertyChangeSupport {
     public void setOnlyCarsWithFinalDestinationEnabled(boolean enable) {
         boolean old = _onlyCarsWithFD;
         _onlyCarsWithFD = enable;
-        setDirtyAndFirePropertyChange("onlyCarsWithFinalDestinations", old, enable);
+        setDirtyAndFirePropertyChange(ROUTED_CHANGED_PROPERTY, old, enable);
     }
 
     /**
@@ -2538,12 +2565,11 @@ public class Track extends PropertyChangeSupport {
 
     /**
      * Construct this Entry from XML. This member has to remain synchronized with
-     * the detailed DTD in operations-config.xml
+     * the detailed DTD in operations-location.dtd.
      *
      * @param e        Consist XML element
      * @param location The Location loading this track.
      */
-    @SuppressWarnings("deprecation") // until there's a replacement for convertFromXmlComment()
     public Track(Element e, Location location) {
         _location = location;
         Attribute a;
@@ -2598,7 +2624,7 @@ public class Track extends PropertyChangeSupport {
         }
         // old way of reading track comment, see comments below for new format
         if ((a = e.getAttribute(Xml.COMMENT)) != null) {
-            _comment = OperationsXml.convertFromXmlComment(a.getValue());
+            _comment = a.getValue();
         }
         // new way of reading car types using elements added in 3.3.1
         if (e.getChild(Xml.TYPES) != null) {
@@ -2861,7 +2887,6 @@ public class Track extends PropertyChangeSupport {
                 log.warn("Not able to find reader: {} for location ({})", a.getValue(), getName());
             }
         }
-
     }
 
     /**
@@ -3029,9 +3054,9 @@ public class Track extends PropertyChangeSupport {
         }
         // save manifest track comments if they exist
         if (!getComment().equals(NONE) ||
-                !getCommentBoth().equals(NONE) ||
-                !getCommentPickup().equals(NONE) ||
-                !getCommentSetout().equals(NONE)) {
+                !getCommentBothWithColor().equals(NONE) ||
+                !getCommentPickupWithColor().equals(NONE) ||
+                !getCommentSetoutWithColor().equals(NONE)) {
             Element comments = new Element(Xml.COMMENTS);
             Element track = new Element(Xml.TRACK);
             Element both = new Element(Xml.BOTH);
@@ -3048,9 +3073,9 @@ public class Track extends PropertyChangeSupport {
             comments.addContent(printSwitchList);
 
             track.setAttribute(Xml.COMMENT, getComment());
-            both.setAttribute(Xml.COMMENT, getCommentBoth());
-            pickup.setAttribute(Xml.COMMENT, getCommentPickup());
-            setout.setAttribute(Xml.COMMENT, getCommentSetout());
+            both.setAttribute(Xml.COMMENT, getCommentBothWithColor());
+            pickup.setAttribute(Xml.COMMENT, getCommentPickupWithColor());
+            setout.setAttribute(Xml.COMMENT, getCommentSetoutWithColor());
             printManifest.setAttribute(Xml.COMMENT, isPrintManifestCommentEnabled() ? Xml.TRUE : Xml.FALSE);
             printSwitchList.setAttribute(Xml.COMMENT, isPrintSwitchListCommentEnabled() ? Xml.TRUE : Xml.FALSE);
 
