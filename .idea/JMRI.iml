@@ -18,7 +18,7 @@
       <sourceFolder url="file://$MODULE_DIR$/java/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/java/test" isTestSource="true" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="1.8" jdkType="JavaSDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module-library" exported="">
       <library>
@@ -52,6 +52,5 @@
       </library>
     </orderEntry>
     <orderEntry type="library" name="lib" level="project" />
-    <orderEntry type="library" name="Python 2.7 interpreter library" level="application" />
   </component>
 </module>
