@@ -205,7 +205,7 @@ class TrainPhysicsTest {
 
     @Test
     public void testGetTractiveForce() {
-        assertEquals(TON_FORCE_BY_MPH_PER_HP, getTractiveForce(20, 20), 00001);
+        assertEquals(TON_FORCE_BY_MPH_PER_HP, getTractiveForce(20, 20), 0.0001);
     }
 
     @Test
@@ -464,7 +464,7 @@ class TrainPhysicsTest {
 
         TrainPhysics trainPhysics = new TrainPhysics(train, true);
         if (DEBUG) {
-            System.out.println("\ntestMotions:\n" + trainPhysics);
+            System.out.println("\n testMotions:\n" + trainPhysics);
         }
     }
 */
