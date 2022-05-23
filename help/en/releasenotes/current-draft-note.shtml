@@ -31,7 +31,7 @@
 
         <h4>DCC++ and DCC-EX</h4>
             <ul>
-                <li></li>
+                <li>Add throttle commands and replies to simulator</li>
             </ul>
 
         <h4>DCC4pc</h4>
@@ -71,7 +71,7 @@
 
         <h4>KPF-Zeller</h4>
             <ul>
-                <li>Improved the speed calibration</li>
+                <li></li>
             </ul>
 
         <h4>LocoNet</h4>
@@ -96,7 +96,8 @@
 
         <h4>MQTT</h4>
             <ul>
-                <li></li>
+                <li>Handled a case in MQTT signal masts that would cause a
+                    spurious error message.</li>
             </ul>
 
         <h4>MRC</h4>
@@ -116,28 +117,7 @@
 
         <h4><a href="http://openlcb.org">OpenLCB</a> / LCC</h4>
             <ul>
-                <li><b>Throttle support.</b> JMRI Throttles can now operate
-                OpenLCB locomotives on OpenLCB / LCC Command Stations via the
-                Traction Protocol draft.</li>
-                <li><b>Monitor Log updates.</b> Decodes and prints the Traction
-                Protocol messages in the Monitor Log window.</li>
-                <li><b>Accessibility changes.</b> The network browser / tree is
-                now navigable using keyboard shortcuts. On the Configuration
-                Editor panel the keys F6 and Shift+F6 can be used to navigate
-                between subsequent sections of the configuration and the bar of
-                buttons at the bottom.</li>
-                <li><b>Test Event button.</b> In the Configuration Editor the
-                Event panels have a new button More... which opens a
-                dropdown. In the dropdown there is a Trigger button which sends
-                the given event. This is useful for testing. In the same
-                dropdown there is a Create Sensor button which for JMRI will
-                create a single-event sensor.</li>
-                <li><b>Bug fixes.</b> Fixes memory leak when opening many
-                different nodes' Configuration Editor windows. The CAN
-                Interface engine now correctly supports sending a message to a
-                Destination Node ID for which there is no currently registered
-                Alias in the Alias Map. The outgoing message will be enqueued
-                and an alias lookup interaction is triggered.</li>
+                <li></li>
             </ul>
 
         <h4>RFID</h4>
@@ -187,7 +167,7 @@
 
     <h3>New / Updated decoder definitions</h3>
         <ul>
-          <li>Parts of the decoder definitions have been translated into Spanish.</li>
+          <li></li>
         </ul>
 
         <h4>Arnold</h4>
@@ -260,6 +240,11 @@
                 <li></li>
             </ul>
 
+        <h4>MD Electronics</h4>
+             <ul>
+                <li></li>
+             </ul>
+
         <h4>MGP</h4>
              <ul>
                 <li></li>
@@ -315,12 +300,7 @@
                 <li></li>
             </ul>
 
-        <h4>Tam Valley Depot</h4>
-            <ul>
-                <li>QuadLN_S - added support for new firmware version 3.1 features</li>
-            </ul>
-
-       <h4>TAMS</h4>
+        <h4>TAMS</h4>
             <ul>
                 <li></li>
             </ul>
@@ -367,7 +347,7 @@
 
         <h4>ZIMO</h4>
             <ul>
-                <li>Fixed the coding for CV155 Half Speed Settings</li>
+                <li></li>
             </ul>
 
         <h4>Miscellaneous</h4>
@@ -378,7 +358,7 @@
     <h3>DecoderPro</h3>
         <a id="DecoderPro" name="DecoderPro"></a>
         <ul>
-            <li></li>
+            <li>Improved accessibility of some buttons.</li>
         </ul>
 
     <h3>CTC Tool</h3>
@@ -390,9 +370,7 @@
    <h3>Dispatcher</h3>
         <a id="Dispatcher" name="Dispatcher"></a>
         <ul>
-             <li>Fixed bouncing speed slider in manual mode.</li>
-             <li>Size AutoTrainsWindow correctly when going between auto and manual with use scroll bars off.</li>
-             <li>Enabled disaplay scale speed for running with speed profiles.</li>
+             <li></li>
         </ul>
 
     <h3>Dispatcher System</h3>
@@ -427,7 +405,10 @@
     <h3>LogixNG</h3>
         <a id="LogixNG" name="LogixNG"></a>
         <ul>
-          <li></li>
+          <li>The action Script and the expression Script
+          now supports both Jython and ECMA Script (JavaScript).
+          As a result, the option <i>Jython command</i> is now
+          renamed to <i>Single line command</i>.</li>
         </ul>
 
     <h3>Meters and MeterFrames</h3>
@@ -491,7 +472,9 @@
     <h3>Turnouts, Lights, Sensors and other elements</h3>
         <a id="TLae" name="TLae"></a>
         <ul>
-            <li></li>
+            <li>The process for adding multiple Lights/Sensors/Turnouts/Reporters has been
+                improved.  Existing items are no longer skipped, so you get the
+                sequential items you asked for. Some error messages have been clarified.</li>
         </ul>
 
     <h3>Scripting</h3>
@@ -549,10 +532,7 @@
     <h3>Throttle</h3>
         <a id="throttle" name="throttle"></a>
         <ul>
-            <li>Add capability to display/print throttle files in easy-to-read browser format (using XSL transform)</li>
-            <li>If there are at least two connections that have support for throttles, a
-            <a href="https://github.com/JMRI/JMRI/pull/10697#issuecomment-1038477488">new menu</a>
-            appears that lets you open a throttle for a particular connection.</li>
+            <li></li>
         </ul>
 
     <h3>Timetable</h3>
@@ -600,26 +580,17 @@
    <h3>Virtual Sound Decoder</h3>
         <a id="VSD" name="VSD"></a>
         <ul>
-            <li>Added a new version of "advanced location following". This is now based
-            on a LayoutEditor panel and hence much easier to setup. See the
-            <a href="https://www.jmri.org/help/en/manual/DecoderPro/VSD_LocationsMgr.shtml#advanced_location_following">
-			documentation</a> for details.</li>
+            <li></li>
         </ul>
 
     <h3>Miscellaneous</h3>
         <a id="Misc" name="Misc"></a>
         <ul>
-            <li>Add a search feature to the JmriHelp local web page.</li>
-            <li>The method JUnitUtil.releaseThread(this) and JUnitUtil.releaseThread(this, delay)
-            has been removed. Use JUnitUtil.waitFor(int time) instead. Replace the call
-            JUnitUtil.releaseThread(this) with JUnitUtil.waitFor(JUnitUtil.DEFAULT_RELEASETHREAD_DELAY);</li>
-            <li>Improve Block tracking in the case of a broken train being rejoined.
-            <li>Multiple updates to the Bachrus/KPF-Zeller speedometer support:
-                <ul>
-                <li>Improved GUI
-                <li>Now handles programming on main without needing to go to service track first
-                <li>Improved speed matching algorithm
-                <li>Updated docs
-                </ul>
+            <li>The xercesImpl library was updated to 2.12.2, which may change
+                the content of some error messages.</li>
+            <li>The macOS and Linux startup scripts now will use a JVM
+                found within a "jre" directory within the JMRI program directory.
+                This lets you install a JVM (JRE or JDK) locally just for
+                JMRI's use.
         </ul>
 
