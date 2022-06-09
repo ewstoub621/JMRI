@@ -12,6 +12,7 @@ public class TrainRevenueParametersFrame extends OperationsFrame {
         super(Bundle.getMessage("EditRevenueParameters"), new TrainRevenueParametersPanel());
     }
 
+    @Override
     public void initComponents() {
         super.initComponents();
 

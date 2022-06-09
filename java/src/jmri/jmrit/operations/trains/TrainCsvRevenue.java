@@ -391,7 +391,7 @@ public class TrainCsvRevenue extends TrainCsvCommon {
     private void setup(Train train) throws IOException {
         File csvFile = InstanceManager.getDefault(TrainManagerXml.class).createTrainCsvRevenueFile(train);
         BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(csvFile), StandardCharsets.UTF_8));
-        CSVFormat format = CSVFormat.DEFAULT.withIgnoreSurroundingSpaces(false);
+        CSVFormat format = CSVFormat.Builder.create().setIgnoreSurroundingSpaces(false).build();
         printer = new CSVPrinter(bufferedWriter, format);
 
         setTrain(train);

@@ -121,6 +121,8 @@ public class TrainRevenueParametersPanel extends OperationsPreferencesPanel impl
             case Setup.REVENUE_SWITCHING_WOODY_CHANGE:
                 Setup.setSwitchWoody(eNewValue);
                 break;
+            default:
+                break;
             }
         }
     }
@@ -251,6 +253,8 @@ public class TrainRevenueParametersPanel extends OperationsPreferencesPanel impl
                 break;
             case "MaximumDiscount":
                 Setup.setMaxDiscount(value);
+                break;
+            default:
                 break;
         }
     }

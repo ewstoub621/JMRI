@@ -2849,8 +2849,8 @@ public class Train extends PropertyChangeSupport implements Identifiable, Proper
         // run after build scripts
         runScripts(getAfterBuildScripts());
         if (Setup.isSaveTrainRevenuesEnabled()) {
+            TrainRevenues.deleteTrainRevenuesSerFile(this);
             TrainRevenues trainRevenues = getTrainRevenues();
-            trainRevenues.deleteTrainRevenuesSerFile(this);
             trainRevenues.loadOrigTrackIdsByCarId();
         }
         return results;

@@ -49,15 +49,7 @@ public class TrainRevenues implements Serializable {
     private static final double MOE_PER_TON_MILE = 0.0434; // Dollars
     private static final double MOW_PER_TON_MILE = 0.0372; // Dollars
     private static final double TGNA_PER_TON_MILE = 0.0372; // Dollars
-    private static final double SERVICE_COST_PER_1000_TON_MILES_DIESEL = 0.36; // Dollars
-    private static final double SERVICE_COST_PER_1000_TON_MILES_ELECTRIC = 0.10; // Dollars
-    private static final double SERVICE_COST_PER_1000_TON_MILES_STEAM = 0.44; // Dollars
-    private static final double SERVICE_COST_PER_1000_TON_MILES_OTHER = 0.03; // Dollars
-    private static final double SERVICE_RATE_PER_FUEL_COST_DIESEL = 0.10; // fraction
-    private static final double SERVICE_RATE_PER_FUEL_COST_ELECTRIC = 0.20; // fraction
-    private static final double SERVICE_RATE_PER_FUEL_COST_STEAM = 0.02; // fraction
-    private static final double SERVICE_RATE_PER_FUEL_COST_OTHER = 0.06; // fraction
-
+    
     private final Map<String, Map<String, CarRevenue>> carRevenueMapByCarId = new TreeMap<>();
     private final Map<String, Map<String, Integer>> spurCapacityMapByCustomer = new HashMap<>();
     private final Set<String> carIdsInDemur = new TreeSet<>();

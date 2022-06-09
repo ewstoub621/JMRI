@@ -326,7 +326,7 @@ public class TrainManagerXml extends OperationsXml implements InstanceManagerAut
      * The '.ser' file is used to write and read the TrainRevenues object to and from the csvRevenues directory
      *
      * @param train
-     * @return
+     * @return serialized file for TrainRevenues object
      */
     public File createTrainRevenuesSerFile(Train train) {
         return createFile(getDefaultTrainRevenuesSerFileName(train), false); // don't backup
