@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class TrainPhysicsTest {
     private static final int ZERO = 0;
     private static final int TEN = 10;
-    private static final boolean DEBUG = false;
 
     // ref Train Forces Calculator by AAK (https://web.archive.org/web/20090408120433/http://www.alkrug.vcn.com/rrfacts/RRForcesCalc.html)
     private static final float X_LOCO_HP = 12000f ;
@@ -73,35 +72,21 @@ class TrainPhysicsTest {
         double distanceLimit;
         int steps = 19;
 
-        if (DEBUG) {
-            System.out.println("\ntestGetNewSpeedTrainMotion:\n" + TrainMotion.getMotionsHeader());
-        }
         for (int i = ZERO; i < steps; i++) {
             distanceLimit = distance - tm.x;
             double newSpeed = i + 1;
             tm = getNewTrainMotion(tm, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
-            if (DEBUG && tm != null) {
-                System.out.println(tm.getMotionData());
-            }
             assertNotNull(tm);
             assertEquals(newSpeed, tm.v);
         }
-        double accelTime = tm.t;
         for (int i = 1; i <= steps; i++) {
             distanceLimit = distance - tm.x;
             double newSpeed = steps - i;
             tm = getNewTrainMotion(tm, newSpeed, driverWeight, engineWeight, carWeights, fullPower, gradePercent, distanceLimit);
-            if (DEBUG && tm != null) {
-                System.out.println(tm.getMotionData());
-            }
             assertNotNull(tm);
             assertEquals(newSpeed, tm.v);
         }
         assertEquals(ZERO, tm.v);
-        if (DEBUG) {
-            System.out.println("acceleration elapsed time = " + accelTime);
-            System.out.println("deceleration elapsed time = " + (tm.t - accelTime));
-        }
     }
 
     @Test
@@ -217,15 +202,7 @@ class TrainPhysicsTest {
 
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
-
         List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
-        if (DEBUG) {
-            System.out.println("\ntestTrainMotionsDeadStartEndStop:\n" + TrainMotion.getMotionsHeader());
-            for (TrainMotion tm : trainMotionList) {
-                System.out.println(tm.getMotionData());
-            }
-        }
-
         assertFalse(trainMotionList.isEmpty());
         assertEquals(priorSpeed, trainMotionList.get(ZERO).v, 0.001);
         assertEquals(speed2, trainMotionList.get(2).v, 0.001);
@@ -245,15 +222,7 @@ class TrainPhysicsTest {
 
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
-
         List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
-        if (DEBUG) {
-            System.out.println("\ntestTrainMotionsDeadStartNoEndStop:\n" + TrainMotion.getMotionsHeader());
-            for (TrainMotion tm : trainMotionList) {
-                System.out.println(tm.getMotionData());
-            }
-        }
-
         assertFalse(trainMotionList.isEmpty());
         assertEquals(priorSpeed, trainMotionList.get(ZERO).v, 0.001);
         assertEquals(speed2, trainMotionList.get(2).v, 0.001);
@@ -273,15 +242,7 @@ class TrainPhysicsTest {
 
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
-
         List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
-        if (DEBUG) {
-            System.out.println("\ntestTrainMotionsFastStartEndStop:\n" + TrainMotion.getMotionsHeader());
-            for (TrainMotion tm : trainMotionList) {
-                System.out.println(tm.getMotionData());
-            }
-        }
-
         assertFalse(trainMotionList.isEmpty());
         assertEquals(priorSpeed, trainMotionList.get(ZERO).v, 0.001);
         assertEquals(speed1, trainMotionList.get(1).v, 0.001);
@@ -301,15 +262,7 @@ class TrainPhysicsTest {
 
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
-
         List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
-        if (DEBUG) {
-            System.out.println("\ntestTrainMotionsFastStartNoEndStop:\n" + TrainMotion.getMotionsHeader());
-            for (TrainMotion tm : trainMotionList) {
-                System.out.println(tm.getMotionData());
-            }
-        }
-
         assertFalse(trainMotionList.isEmpty());
         assertEquals(priorSpeed, trainMotionList.get(ZERO).v, 0.001);
         assertEquals(speed1, trainMotionList.get(1).v, 0.001);
@@ -329,15 +282,7 @@ class TrainPhysicsTest {
 
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
-
         List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
-        if (DEBUG) {
-            System.out.println("\ntestTrainMotionsSlowStartEndStop:\n" + TrainMotion.getMotionsHeader());
-            for (TrainMotion tm : trainMotionList) {
-                System.out.println(tm.getMotionData());
-            }
-        }
-
         assertFalse(trainMotionList.isEmpty());
         assertEquals(priorSpeed, trainMotionList.get(ZERO).v, 0.001);
         assertEquals(speed1, trainMotionList.get(1).v, 0.001);
@@ -357,15 +302,7 @@ class TrainPhysicsTest {
 
         List<Engine> engines = registerNewEngine("NKP", "500", "FT", "Diesel");
         ArrayList<Integer> carWeights = new ArrayList<>(Arrays.asList(75, 25, 75, 25, 75, 25));
-
         List<TrainMotion> trainMotionList = getTrainMotions(engines, carWeights, 110, ZERO, 2.5, priorSpeed, speedLimit, TEN, endStop);
-        if (DEBUG) {
-            System.out.println("\ntestTrainMotionsSlowStartNoEndStop:\n" + TrainMotion.getMotionsHeader());
-            for (TrainMotion tm : trainMotionList) {
-                System.out.println(tm.getMotionData());
-            }
-        }
-
         assertFalse(trainMotionList.isEmpty());
         assertEquals(priorSpeed, trainMotionList.get(ZERO).v, 0.001);
         assertEquals(speed1, trainMotionList.get(1).v, 0.001);
@@ -421,52 +358,4 @@ class TrainPhysicsTest {
 
         return engines;
     }
-
-/*
-    @Test
-    public void testMotions() throws Exception {
-        int cars = TEN;
-        int grade = 1;
-
-        Train train = new Train("1", "TM");
-        Route route = new Route("1", "Route1");
-        train.setRoute(route);
-
-        Location loc1 = new Location("1", "Location1");
-        route.addLocation(loc1, 1);
-
-        RouteLocation rl1 = new RouteLocation("1r1", loc1);
-        rl1.setDistance(TEN);
-        rl1.setGrade(grade);
-        rl1.setSpeedLimit(40);
-        rl1.setSequenceNumber(1);
-        route.register(rl1);
-
-        Location loc2 = new Location("2", "Location2");
-        route.addLocation(loc2, 2);
-
-        RouteLocation rl2 = new RouteLocation("1r2", loc2);
-        rl2.setSequenceNumber(2);
-        route.register(rl2);
-
-        TrainRevenues trainRevenues = new TrainRevenues(train);
-        train.setTrainRevenues(trainRevenues);
-
-        List<Integer> carWeights = buildCarWeights(cars);
-        trainRevenues.getTrainCarWeights().put("1r1", carWeights);
-
-        Engine engine = new Engine("NPK", "123");
-        engine.setModel("FT");
-        engine.setTypeName("Diesel");
-        InstanceManager.getDefault(EngineManager.class).register(engine);
-        trainRevenues.getTrainEngines().put("1r1", new ArrayList<>());
-        trainRevenues.getTrainEngines().get("1r1").add(engine);
-
-        TrainPhysics trainPhysics = new TrainPhysics(train, true);
-        if (DEBUG) {
-            System.out.println("\n testMotions:\n" + trainPhysics);
-        }
-    }
-*/
-
 }

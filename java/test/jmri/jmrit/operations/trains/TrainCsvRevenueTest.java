@@ -309,6 +309,8 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     registerNewRouteLocation(loc, 2 * loc, 0.0, 0.0, location);
                     createNewTrack(6, location, "Yard " + loc, Track.YARD);
                     break;
+                default:
+                    break;
             }
         }
 
@@ -343,6 +345,8 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     train.setThirdLegEngineRoad(road);
                     train.setThirdLegCabooseRoad(road);
                     registerNewEngine(track, road, "504", "RS1", null);
+                    break;
+                default:
                     break;
             }
         }
@@ -556,6 +560,8 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     conductorAdd("NKP", "76555", "XM", "Seed", 3, 3, 4, 4);
                     conductorCancel("VGN", "15779");
                     conductorDivert("UP", "46774D", 3, 4);
+                    break;
+                default:
                     break;
             }
             if (restartMove) {
