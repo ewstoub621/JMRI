@@ -1,6 +1,5 @@
 package jmri.jmrit.operations.rollingstock;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import jmri.beans.PropertyChangeSupport;
@@ -13,7 +12,7 @@ import org.slf4j.LoggerFactory;
  * @author Daniel Boudreau Copyright (C) 2010, 2013
  * @param <T> the type of RollingStock in this group
  */
-public abstract class RollingStockGroup<T extends RollingStock> extends PropertyChangeSupport  implements Serializable {
+public abstract class RollingStockGroup<T extends RollingStock> extends PropertyChangeSupport {
 
     protected String _name = "";
     protected T _lead = null;

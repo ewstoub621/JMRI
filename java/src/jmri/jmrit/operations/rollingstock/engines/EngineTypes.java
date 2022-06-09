@@ -13,8 +13,6 @@ import jmri.jmrit.operations.rollingstock.RollingStockAttribute;
  */
 public class EngineTypes extends RollingStockAttribute implements InstanceManagerAutoDefault {
 
-    private static final String TYPES = Bundle.getMessage("engineDefaultTypes");
-
     // for property change
     public static final String ENGINETYPES_CHANGED_PROPERTY = "EngineTypesLength"; // NOI18N
     public static final String ENGINETYPES_NAME_CHANGED_PROPERTY = "EngineTypesName"; // NOI18N
@@ -22,9 +20,12 @@ public class EngineTypes extends RollingStockAttribute implements InstanceManage
     public EngineTypes() {
     }
 
+    /**
+     * @return default engine type names, in CSV format, according to the Locale currently being used by the JVM
+     */
     @Override
     protected String getDefaultNames() {
-        return TYPES;
+        return Bundle.getMessage("engineDefaultTypes");
     }
 
     @Override

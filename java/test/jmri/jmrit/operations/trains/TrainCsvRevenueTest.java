@@ -14,19 +14,14 @@ import jmri.jmrit.operations.routes.RouteLocation;
 import jmri.jmrit.operations.routes.RouteManager;
 import jmri.jmrit.operations.setup.Setup;
 import jmri.util.JUnitOperationsUtil;
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVPrinter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
-import java.time.LocalDate;
 import java.util.*;
 
 import static jmri.jmrit.operations.trains.TrainCsvRevenue.TOTAL_COL;
@@ -52,6 +47,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     private static final int LOC_7 = 7;
     private static final double TRAIN_TOTAL_REVENUE = 6983.75;
     private static final double TRAIN_TOTAL_COST = 5476.79;
+    private String engineType;
 
     private CarManager carManager;
     private CarTypes carTypes;
@@ -60,8 +56,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     private RouteManager routeManager;
     private TrainManager trainManager;
     private TrainManagerXml trainManagerXml;
-
-    private Locale defaultLocale;
+    private Locale defaultLocale = Locale.getDefault(); // save the default locale.
     private Route route;
     private Train train;
     private Map<String, Track> tracksByTrackId;
@@ -70,6 +65,8 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
     @Override
     @BeforeEach
     public void setUp() {
+        Locale.setDefault(Locale.US);
+
         super.setUp();
 
         carManager = InstanceManager.getDefault(CarManager.class);
@@ -79,6 +76,8 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         routeManager = InstanceManager.getDefault(RouteManager.class);
         trainManager = InstanceManager.getDefault(TrainManager.class);
         trainManagerXml = InstanceManager.getDefault(TrainManagerXml.class);
+
+        trainManager.setBuildMessagesEnabled(false);
 
         File csvRevenueDirectory = new File(trainManagerXml.getDefaultTrainCsvRevenueDirectory());
         if (csvRevenueDirectory.exists()) {
@@ -119,6 +118,16 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
 
         File trainRevenuesFile = TrainRevenues.getTrainRevenuesCsvFile(train);
         assertNotNull(trainRevenuesFile, "exists");
+    }
+
+    @Test
+    public void testCreateCsvRevenueTrainCS() throws Exception {
+        try {
+            Locale.setDefault(new Locale("cs", "CZ"));
+            verifyCsvRevenue(false);
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
     }
 
     @Test
@@ -201,7 +210,17 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         }
     }
 
+    private String getDieselEngineType() {
+        switch (Locale.getDefault().getCountry()) {
+            case "CZ": return "Motorová";
+            case "JP": return "ディーゼル";
+            default: return "Diesel";
+        }
+    }
+
     private void buildRailroad() {
+        engineType = getDieselEngineType();
+
         Setup.setBuildReportLevel(Setup.BUILD_REPORT_VERY_DETAILED);
 
         String dEn = CarRevenue.getDefaultEmptyName();
@@ -216,17 +235,15 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
 
         train = registerNewTrain();
         assertNotNull(train);
+        train.addTypeName(engineType);
 
         routeLocationsById = new TreeMap<>();
         tracksByTrackId = new TreeMap<>();
 
         Track track;
         String road = "CP";
-        List<Engine> engines = new ArrayList<>();
         RouteLocation rl3 = null;
         RouteLocation rl4 = null;
-        RouteLocation rl5 = null;
-        RouteLocation rl6 = null;
         int customerNumber = GREATER_THAN;
         Location location;
         // create Tracks, Locations, RouteLocations, and freight cars
@@ -283,10 +300,10 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     updateCar("VGN", "15508", "Hopper", dLn, track);
                     break;
                 case LOC_5:
-                    rl5 = registerNewRouteLocation(loc, 2 * loc, 0, 1.0, location);
+                    registerNewRouteLocation(loc, 2 * loc, 0, 1.0, location);
                     break;
                 case LOC_6:
-                    rl6 = registerNewRouteLocation(loc, 2 * loc, 0, 2.0, location);
+                    registerNewRouteLocation(loc, 2 * loc, 0, 2.0, location);
                     break;
                 case LOC_7:
                     registerNewRouteLocation(loc, 2 * loc, 0.0, 0.0, location);
@@ -294,42 +311,38 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     break;
             }
         }
-        String model;
-        String type = "Diesel";
+
         // create engines
         for (int loc = LOC_1; loc <= LOC_7; loc++) {
             switch (loc) {
                 case LOC_1:
                     track = tracksByTrackId.get("1s01");
-                    model = "GP20";
-                    engines.add(registerNewEngine(track, road, "500", model, type, null));
+                    registerNewEngine(track, road, "500", "GP20", null);
                     break;
                 case LOC_3:
                     track = tracksByTrackId.get("1s03");
                     track.setBlockCarsEnabled(true);
-                    model = "GP40";
                     train.setSecondLegOptions(Train.CHANGE_ENGINES);
                     train.setSecondLegStartRouteLocation(rl3);
                     train.setSecondLegEndRouteLocation(rl4);
                     train.setSecondLegNumberEngines("2");
-                    train.setSecondLegEngineModel(model);
+                    train.setSecondLegEngineModel("GP40");
                     train.setSecondLegEngineRoad(road);
                     train.setSecondLegCabooseRoad(road);
                     Consist consist = new Consist("Double");
-                    engines.add(registerNewEngine(track, road, "503A", model, type, consist));
-                    engines.add(registerNewEngine(track, road, "503B", model, type, consist));
+                    registerNewEngine(track, road, "503A", "GP40", consist);
+                    registerNewEngine(track, road, "503B", "GP40", consist);
                     break;
                 case LOC_4:
                     track = tracksByTrackId.get("1s04");
                     track.setBlockCarsEnabled(true);
-                    model = "RS1";
                     train.setThirdLegOptions(Train.CHANGE_ENGINES);
                     train.setThirdLegStartRouteLocation(rl4);
                     train.setThirdLegNumberEngines("1");
-                    train.setThirdLegEngineModel(model);
+                    train.setThirdLegEngineModel("RS1");
                     train.setThirdLegEngineRoad(road);
                     train.setThirdLegCabooseRoad(road);
-                    engines.add(registerNewEngine(track, road, "504", model, type, null));
+                    registerNewEngine(track, road, "504", "RS1", null);
                     break;
             }
         }
@@ -421,18 +434,16 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
         return map;
     }
 
-    private Engine registerNewEngine(Track track, String road, String number, String model, String type, Consist consist) {
+    private void registerNewEngine(Track track, String road, String number, String model, Consist consist) {
         Engine engine = new Engine(road, number);
         if (consist != null) {
             consist.add(engine);
             engine.setConsist(consist);
         }
         engine.setModel(model);
-        engine.setTypeName(type);
+        engine.setTypeName(engineType);
         engine.setLocation(track.getLocation(), track);
         engineManager.register(engine);
-
-        return engine;
     }
 
     private Location registerNewLocation(int loc) {
@@ -546,9 +557,6 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     conductorCancel("VGN", "15779");
                     conductorDivert("UP", "46774D", 3, 4);
                     break;
-                case LOC_7:
-                    conductorCancel("VGN", "15508");
-                    break;
             }
             if (restartMove) {
                 verifyRestartRestoreMoveCycle(train);
@@ -572,7 +580,7 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
             List<TrainMotion> trainMotionList = e.getValue();
             if (trainMotionList != null && !trainMotionList.isEmpty()) {
                 if (DEBUG) {
-                    System.out.println(String.format("\nRouteLocation id \"%s\":\n", thisRlId));
+                    System.out.printf("\nRouteLocation id \"%s\":\n%n\n", thisRlId);
                     System.out.println(TrainMotion.getMotionsHeader());
                     for (TrainMotion tm : trainMotionList) {
                         System.out.println(tm.getMotionData());
@@ -595,10 +603,11 @@ public class TrainCsvRevenueTest extends OperationsTestCase {
                     String finalRttString = rowValues.get(TOTAL_COL + 3);
                     assertEquals(expectedRttString, finalRttString);
                 }
-                if (TrainCsvRevenue.OTT.equals(rowValues.get(0))) {
-                    String expectedOttString = NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_COST));
-                    String finalOttString = rowValues.get(TOTAL_COL + 3);
-                    assertEquals(expectedOttString, finalOttString);
+
+               if (TrainCsvRevenue.OTT.equals(rowValues.get(0))) {
+                    String expectedOTT_TTC_String = NumberFormat.getCurrencyInstance(Locale.getDefault()).format(BigDecimal.valueOf(TRAIN_TOTAL_COST));
+                    String finalOTT_TTC_String = rowValues.get(TOTAL_COL + 3);
+                    assertEquals(expectedOTT_TTC_String, finalOTT_TTC_String, "Total Cost");
                 }
             }
         }

@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class TrainPhysicsTest {
     private static final int ZERO = 0;
     private static final int TEN = 10;
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
 
     // ref Train Forces Calculator by AAK (https://web.archive.org/web/20090408120433/http://www.alkrug.vcn.com/rrfacts/RRForcesCalc.html)
     private static final float X_LOCO_HP = 12000f ;
